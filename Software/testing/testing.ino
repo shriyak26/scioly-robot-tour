@@ -31,6 +31,7 @@
 */
 
 #include <QList.h>
+#include <math.h>
 
 using namespace std;
 
@@ -52,7 +53,7 @@ using namespace std;
 bool status = false;
 
 QList<int> cmdQueue;
-QList<double> paramQueue;
+QList<float> paramQueue;
 
 // int references for each command
 #define START_WAIT  0
@@ -63,9 +64,9 @@ QList<double> paramQueue;
 
 // placeholder values, we need to mess with them to get accurate distances
 // milimeters per milisecond
-double linearVelocity = 0.1;
+float linearVelocity = 0.1;
 // degrees per milisecond
-double rotationalVelocity = 0.01;
+float rotationalVelocity = 0.01;
 
 void setup()
 {
@@ -83,6 +84,9 @@ void setup()
     analogWrite(motor1PWMPin, 100);
     analogWrite(motor2PWMPin, 100);
 
+    pinMode(sensorTrigPin, OUTPUT);
+    pinMode(sensorEchoPin, INPUT);
+
     add(START_WAIT);
 
     // commands go here
@@ -99,7 +103,7 @@ void loop()
     if(status)
     {
         int currentCmd = cmdQueue.front();
-        double currentParam = paramQueue.front();
+        float currentParam = paramQueue.front();
 
         switch (currentCmd)
         {
@@ -131,7 +135,7 @@ void add(int cmd)
     paramQueue.push_back(0);
 }
 
-void add(int cmd, double param)
+void add(int cmd, float param)
 {
     cmdQueue.push_back(cmd);
     paramQueue.push_back(param);
@@ -147,31 +151,52 @@ void checkButton()
     }
 }
 
-void moveForward(double distance)
+void moveForward(float distance)
 {
-    double time = distance / linearVelocity;
+    float time = distance / linearVelocity;
     motorLeftForward();
     motorRightForward();
     delay(time);
     motorStop();
 }
 
-void turnLeft(double degrees)
+void moveBackward(float distance)
 {
-    double time = degrees / rotationalVelocity;
+    float time = distance / linearVelocity;
+    motorLeftBackward();
+    motorRightBackward();
+    delay(time);
+    motorStop();
+}
+
+void turnLeft(float degrees)
+{
+    float time = degrees / rotationalVelocity;
     motorRightForward();
     motorLeftBackward();
     delay(time);
     motorStop();
 }
 
-void turnRight(double degrees)
+void turnRight(float degrees)
 {
-    double time = degrees / rotationalVelocity;
+    float time = degrees / rotationalVelocity;
     motorLeftForward();
     motorRightBackward();
     delay(time);
     motorStop();
+}
+
+void motorForward()
+{
+    motorLeftForward();
+    motorRightForward();
+}
+
+void motorBackward()
+{
+    motorLeftBackward();
+    motorRightBackward();
 }
 
 void motorLeftForward()
@@ -204,4 +229,59 @@ void motorStop()
     digitalWrite(motor1Pin2, LOW);
     digitalWrite(motor2Pin1, LOW);
     digitalWrite(motor2Pin2, LOW);
+}
+
+void moveTil(float distance)
+{
+    // start motors in correct direction
+    if(getDistance() > distance)
+    {
+        motorForward();
+    }
+    else
+    {
+        motorBackward();
+    }
+    
+    // stop motors when within margin of error
+    while(!(fabs(getDistance() - distance) > 0.5))
+    {
+        motorStop();
+    }
+}
+
+float getDistance()
+{
+    // ensure trigger is low
+    digitalWrite(sensorTrigPin, LOW);
+    delayMicroseconds(2);
+
+    // send pulse
+    digitalWrite(sensorTrigPin, HIGH);
+    delayMicroseconds(10);
+
+    // turn off pulse
+    digitalWrite(sensorTrigPin, LOW);
+
+    // get duration of return
+    float duration = pulseIn(sensorEchoPin, HIGH);
+
+    // convert to distance in mm (speed of sound = 343 m/s)
+    // duration in microseconds * mm per microsecond / 2 (round trip)
+    return duration * 0.343 / 2;
+}
+
+void distanceTester()
+{
+    while(fabs(getDistance() - 100) > 0.5)
+    {
+        if(getDistance() > 100)
+        {
+            motorForward();
+        }
+        else
+        {
+            motorBackward();
+        }
+    }
 }
