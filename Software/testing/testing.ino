@@ -60,6 +60,8 @@ QList<float> paramQueue;
 #define FORWARD     10 
 #define TURN_LEFT   11
 #define TURN_RIGHT  13
+#define MOVE_TIL    14
+#define BACKWARD    15
 #define STOP        1
 
 // placeholder values, we need to mess with them to get accurate distances
@@ -87,12 +89,17 @@ void setup()
     pinMode(sensorTrigPin, OUTPUT);
     pinMode(sensorEchoPin, INPUT);
 
+    cmdQueue.clear();
+    paramQueue.clear();
+
+    // must be first!
     add(START_WAIT);
 
     // commands go here
     add(FORWARD,500);
     add(TURN_RIGHT,90);
 
+    // must be last!
     add(STOP);
 }
 
@@ -102,30 +109,36 @@ void loop()
 
     if(status)
     {
-        int currentCmd = cmdQueue.front();
-        float currentParam = paramQueue.front();
-
-        switch (currentCmd)
-        {
-            case START_WAIT :
-                break;
-            case FORWARD :
-                moveForward(currentParam);
-                break;
-            case TURN_LEFT :
-                turnLeft(currentParam);
-                break;
-            case TURN_RIGHT :
-                turnRight(currentParam);
-                break;
-            case STOP :
-                status = false;
-            default :
-                status = false;
-        }
-
         cmdQueue.pop_front();
         paramQueue.pop_front();
+    }
+
+    int currentCmd = cmdQueue.front();
+    float currentParam = paramQueue.front();
+
+    switch (currentCmd)
+    {
+        case START_WAIT :
+            break;
+        case FORWARD :
+            moveForward(currentParam);
+            break;
+        case TURN_LEFT :
+            turnLeft(currentParam);
+            break;
+        case TURN_RIGHT :
+            turnRight(currentParam);
+            break;
+        case MOVE_TIL :
+            moveTil(currentParam);
+            break;
+        case BACKWARD :
+            moveBackward(currentParam);
+            break;
+        case STOP :
+            status = false;
+        default :
+            status = false;
     }
 }
 
@@ -151,6 +164,7 @@ void checkButton()
     }
 }
 
+// moves forward for distance (mm)
 void moveForward(float distance)
 {
     float time = distance / linearVelocity;
@@ -160,6 +174,7 @@ void moveForward(float distance)
     motorStop();
 }
 
+// moves backward for distance (mm)
 void moveBackward(float distance)
 {
     float time = distance / linearVelocity;
@@ -169,30 +184,32 @@ void moveBackward(float distance)
     motorStop();
 }
 
+// turns left for degrees
 void turnLeft(float degrees)
 {
     float time = degrees / rotationalVelocity;
-    motorRightForward();
-    motorLeftBackward();
+    motorForward();
     delay(time);
     motorStop();
 }
 
+// turns right for degrees
 void turnRight(float degrees)
 {
     float time = degrees / rotationalVelocity;
-    motorLeftForward();
-    motorRightBackward();
+    motorBackward();
     delay(time);
     motorStop();
 }
 
+// turns both motors on forward
 void motorForward()
 {
     motorLeftForward();
     motorRightForward();
 }
 
+// turns both motors on backward
 void motorBackward()
 {
     motorLeftBackward();
@@ -223,6 +240,7 @@ void motorRightBackward()
     digitalWrite(motor2Pin2, HIGH);
 }
 
+// turns both motors off
 void motorStop()
 {
     digitalWrite(motor1Pin1, LOW);
@@ -231,6 +249,7 @@ void motorStop()
     digitalWrite(motor2Pin2, LOW);
 }
 
+// moves forward until distance from wall (mm)
 void moveTil(float distance)
 {
     // start motors in correct direction
