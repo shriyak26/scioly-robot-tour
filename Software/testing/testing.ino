@@ -62,13 +62,14 @@ QList<float> paramQueue;
 #define TURN_RIGHT  13
 #define MOVE_TIL    14
 #define BACKWARD    15
+#define TEST        16
 #define STOP        1
 
 // placeholder values, we need to mess with them to get accurate distances
 // milimeters per milisecond
-float linearVelocity = 0.1;
+float linearVelocity = 0.5;
 // degrees per milisecond
-float rotationalVelocity = 0.01;
+float rotationalVelocity = 0.5;
 
 void setup()
 {
@@ -96,8 +97,8 @@ void setup()
     add(START_WAIT);
 
     // commands go here
-    add(FORWARD,500);
-    add(TURN_RIGHT,90);
+    add(TEST,0);
+    // add(TURN_RIGHT,20);
 
     // must be last!
     add(STOP);
@@ -134,6 +135,9 @@ void loop()
             break;
         case BACKWARD :
             moveBackward(currentParam);
+            break;
+        case TEST :
+            distanceTester();
             break;
         case STOP :
             status = false;
@@ -188,7 +192,8 @@ void moveBackward(float distance)
 void turnLeft(float degrees)
 {
     float time = degrees / rotationalVelocity;
-    motorForward();
+    motorLeftForward();
+    motorRightBackward();
     delay(time);
     motorStop();
 }
@@ -197,7 +202,8 @@ void turnLeft(float degrees)
 void turnRight(float degrees)
 {
     float time = degrees / rotationalVelocity;
-    motorBackward();
+    motorLeftBackward();
+    motorRightForward();
     delay(time);
     motorStop();
 }
@@ -216,25 +222,25 @@ void motorBackward()
     motorRightBackward();
 }
 
-void motorLeftForward()
+void motorRightForward()
 {
     digitalWrite(motor1Pin1, HIGH);
     digitalWrite(motor1Pin2, LOW);
 }
 
-void motorRightForward()
+void motorLeftForward()
 {
     digitalWrite(motor2Pin1, HIGH);
     digitalWrite(motor2Pin2, LOW);
 }
 
-void motorLeftBackward()
+void motorRightBackward()
 {
     digitalWrite(motor1Pin1, LOW);
     digitalWrite(motor1Pin2, HIGH);
 }
 
-void motorRightBackward()
+void motorLeftBackward()
 {
     digitalWrite(motor2Pin1, LOW);
     digitalWrite(motor2Pin2, HIGH);
