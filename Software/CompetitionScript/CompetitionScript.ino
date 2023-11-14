@@ -30,6 +30,15 @@
     return the value, you have to use front() to get the first value.
 */
 
+/*
+    IMPORTANT! Use these to adjust distance and turning times.
+    Individual command parameters currently do not work.
+*/
+#define STRAIGHT_DELAY  3000
+#define TURN_DELAY      1000
+
+
+
 #include <QList.h>
 #include <math.h>
 
@@ -71,12 +80,15 @@ QList<float> paramQueue;
 #define TURN_PWM        100
 
 #define ACCEL_DELAY     10000
+#define ACCEL_DELAY_2   1000
+#define ACCEL_STOP      50
 
 // placeholder values, we need to mess with them to get accurate distances
+// NOT IN USE
 // milimeters per milisecond
 float linearVelocity = 0.5;
 // degrees per milisecond
-float rotationalVelocity = 90;
+float rotationalVelocity = 5;
 
 void setup()
 {
@@ -103,9 +115,10 @@ void setup()
     // must be first!
     add(START_WAIT);
 
+    // BEGIN SETUP
     // commands go here
-    // add(FORWARD,100);
-    add(TURN_RIGHT,90);
+    // add(FORWARD);
+    add(TURN_RIGHT);
 
     // must be last!
     add(STOP);
@@ -188,11 +201,11 @@ void moveForward(float distance)
     
     motorForward();
     
-    float time = distance / linearVelocity;
-    delay(time);
+    // float time = distance / linearVelocity;
+    delay(STRAIGHT_DELAY);
 
     // deceleration/braking algorithm
-    while(speed > 0)
+    while(speed > ACCEL_STOP)
     {
         delayMicroseconds(ACCEL_DELAY);
         setSpeed(--speed);
@@ -208,11 +221,11 @@ void moveBackward(float distance)
     
     motorBackward();
     
-    float time = distance / linearVelocity;
-    delay(time);
+    // float time = distance / linearVelocity;
+    delay(STRAIGHT_DELAY);
 
     // deceleration/braking algorithm
-    while(speed > 0)
+    while(speed > ACCEL_STOP)
     {
         delayMicroseconds(ACCEL_DELAY);
         setSpeed(--speed);
@@ -224,22 +237,48 @@ void moveBackward(float distance)
 // turns left for degrees
 void turnLeft(float degrees)
 {
-    setSpeed(TURN_PWM);
-    float time = degrees / rotationalVelocity;
+    int speed = TURN_PWM;
+    
+    setSpeed(speed);
+
+    // float time = degrees / rotationalVelocity;
     motorLeftForward();
     motorRightBackward();
-    delay(time);
+    delay(TURN_DELAY);
+
+    // disabled because deceleration takes too long
+    /*
+    while(speed > ACCEL_STOP)
+    {
+        delayMicroseconds(ACCEL_DELAY_2);
+        setSpeed(--speed);
+    }
+    */
+
     motorStop();
 }
 
 // turns right for degrees
 void turnRight(float degrees)
 {
+    int speed = TURN_PWM;
+    
+    setSpeed(speed);
+    
     setSpeed(TURN_PWM);
-    float time = degrees / rotationalVelocity;
+    // float time = degrees / rotationalVelocity;
     motorLeftBackward();
     motorRightForward();
-    delay(time);
+    delay(TURN_DELAY);
+
+    /*
+    while(speed > ACCEL_STOP)
+    {
+        delayMicroseconds(ACCEL_DELAY_2);
+        setSpeed(--speed);
+    }
+    */
+
     motorStop();
 }
 
@@ -290,7 +329,7 @@ void motorStop()
     digitalWrite(motor2Pin2, LOW);
 }
 
-// moves forward until distance from wall (mm)
+// move until distance from wall (mm)
 void moveTil(float distance)
 {
     int speed = STRAIGHT_PWM;
@@ -306,19 +345,18 @@ void moveTil(float distance)
         motorBackward();
     }
     
-    // stop motors when within margin of error
+    // stop motors when within margin of error (2 mm)
+    // to allow for deceleration
     while((fabs(getDistance() - distance) > 2))
     {
-
+        delayMicroseconds(1);
     }
 
-    while(speed > 0)
+    while(speed > ACCEL_STOP)
     {
         delayMicroseconds(ACCEL_DELAY);
         setSpeed(--speed);
     }
-
-    motorStop();
 
     motorStop();
 }
