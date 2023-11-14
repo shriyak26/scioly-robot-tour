@@ -23,6 +23,6 @@ float getDistance()
     delayMicroseconds(10);
     digitalWrite(sensorTrigPin, LOW);
     float duration = pulseIn(sensorEchoPin, HIGH);
-    float distance = duration * 0.0343 / 2;
+    float distance = duration * 0.343 / 2;
     return distance;
 }

@@ -1,5 +1,5 @@
 {
-    "sketch": "Software\\testing\\testing.ino",
+    "sketch": "Software\\CompetitionScript\\CompetitionScript.ino",
     "board": "arduino:avr:uno",
     "port": "COM3",
     "programmer": "avrisp"

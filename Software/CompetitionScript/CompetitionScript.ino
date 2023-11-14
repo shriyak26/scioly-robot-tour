@@ -66,14 +66,17 @@ QList<float> paramQueue;
 #define STOP        1
 
 // PWM values for straight and turning, 0 = min, 255 = max
+#define START_PWM       50
 #define STRAIGHT_PWM    100
-#define TURN_PWM        20
+#define TURN_PWM        100
+
+#define ACCEL_DELAY     10000
 
 // placeholder values, we need to mess with them to get accurate distances
 // milimeters per milisecond
 float linearVelocity = 0.5;
 // degrees per milisecond
-float rotationalVelocity = 0.5;
+float rotationalVelocity = 90;
 
 void setup()
 {
@@ -101,8 +104,8 @@ void setup()
     add(START_WAIT);
 
     // commands go here
-    add(TEST,0);
-    // add(TURN_RIGHT,20);
+    // add(FORWARD,100);
+    add(TURN_RIGHT,90);
 
     // must be last!
     add(STOP);
@@ -145,6 +148,7 @@ void loop()
             break;
         case STOP :
             status = false;
+            setup();
         default :
             status = false;
     }
@@ -180,22 +184,40 @@ void setSpeed(int speed)
 // moves forward for distance (mm)
 void moveForward(float distance)
 {
-    setSpeed(STRAIGHT_PWM);
+    int speed = STRAIGHT_PWM;
+    
+    motorForward();
+    
     float time = distance / linearVelocity;
-    motorLeftForward();
-    motorRightForward();
     delay(time);
+
+    // deceleration/braking algorithm
+    while(speed > 0)
+    {
+        delayMicroseconds(ACCEL_DELAY);
+        setSpeed(--speed);
+    }
+
     motorStop();
 }
 
 // moves backward for distance (mm)
 void moveBackward(float distance)
 {
-    setSpeed(STRAIGHT_PWM);
+    int speed = STRAIGHT_PWM;
+    
+    motorBackward();
+    
     float time = distance / linearVelocity;
-    motorLeftBackward();
-    motorRightBackward();
     delay(time);
+
+    // deceleration/braking algorithm
+    while(speed > 0)
+    {
+        delayMicroseconds(ACCEL_DELAY);
+        setSpeed(--speed);
+    }
+
     motorStop();
 }
 
@@ -271,6 +293,9 @@ void motorStop()
 // moves forward until distance from wall (mm)
 void moveTil(float distance)
 {
+    int speed = STRAIGHT_PWM;
+    setSpeed(speed);
+    
     // start motors in correct direction
     if(getDistance() > distance)
     {
@@ -282,10 +307,20 @@ void moveTil(float distance)
     }
     
     // stop motors when within margin of error
-    while(!(fabs(getDistance() - distance) > 0.5))
+    while((fabs(getDistance() - distance) > 2))
     {
-        motorStop();
+
     }
+
+    while(speed > 0)
+    {
+        delayMicroseconds(ACCEL_DELAY);
+        setSpeed(--speed);
+    }
+
+    motorStop();
+
+    motorStop();
 }
 
 float getDistance()
@@ -306,7 +341,7 @@ float getDistance()
 
     // convert to distance in mm (speed of sound = 343 m/s)
     // duration in microseconds * mm per microsecond / 2 (round trip)
-    return duration * 0.0343 / 2;
+    return duration * 0.343 / 2;
 }
 
 void distanceTester()
