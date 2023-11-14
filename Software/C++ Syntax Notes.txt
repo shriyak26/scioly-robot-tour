@@ -1,0 +1,6 @@
+- C++ queues uses push() and pop(), pop() does not return the object, it only removes it from the queue
+- #define saves memory over const int (C++ version of final)
+- float saves memory over double but can't store as much data
+- a method and variable can't have the same name in local reference
+- use fabs() for absolute value of float
+- use GitHub copilot

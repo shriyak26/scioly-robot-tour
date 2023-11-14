@@ -65,6 +65,10 @@ QList<float> paramQueue;
 #define TEST        16
 #define STOP        1
 
+// PWM values for straight and turning, 0 = min, 255 = max
+#define STRAIGHT_PWM    100
+#define TURN_PWM        20
+
 // placeholder values, we need to mess with them to get accurate distances
 // milimeters per milisecond
 float linearVelocity = 0.5;
@@ -168,9 +172,15 @@ void checkButton()
     }
 }
 
+void setSpeed(int speed)
+{
+    analogWrite(motor1PWMPin, speed);
+    analogWrite(motor2PWMPin, speed);
+}
 // moves forward for distance (mm)
 void moveForward(float distance)
 {
+    setSpeed(STRAIGHT_PWM);
     float time = distance / linearVelocity;
     motorLeftForward();
     motorRightForward();
@@ -181,6 +191,7 @@ void moveForward(float distance)
 // moves backward for distance (mm)
 void moveBackward(float distance)
 {
+    setSpeed(STRAIGHT_PWM);
     float time = distance / linearVelocity;
     motorLeftBackward();
     motorRightBackward();
@@ -191,6 +202,7 @@ void moveBackward(float distance)
 // turns left for degrees
 void turnLeft(float degrees)
 {
+    setSpeed(TURN_PWM);
     float time = degrees / rotationalVelocity;
     motorLeftForward();
     motorRightBackward();
@@ -201,6 +213,7 @@ void turnLeft(float degrees)
 // turns right for degrees
 void turnRight(float degrees)
 {
+    setSpeed(TURN_PWM);
     float time = degrees / rotationalVelocity;
     motorLeftBackward();
     motorRightForward();
@@ -293,7 +306,7 @@ float getDistance()
 
     // convert to distance in mm (speed of sound = 343 m/s)
     // duration in microseconds * mm per microsecond / 2 (round trip)
-    return duration * 0.343 / 2;
+    return duration * 0.0343 / 2;
 }
 
 void distanceTester()
