@@ -35,7 +35,7 @@
     Individual command parameters currently do not work.
 */
 #define STRAIGHT_DELAY  3000
-#define TURN_DELAY      1000
+#define TURN_DELAY      600
 
 
 
@@ -77,7 +77,7 @@ QList<float> paramQueue;
 // PWM values for straight and turning, 0 = min, 255 = max
 #define START_PWM       50
 #define STRAIGHT_PWM    100
-#define TURN_PWM        100
+#define TURN_PWM        65
 
 #define ACCEL_DELAY     10000
 #define ACCEL_DELAY_2   1000
