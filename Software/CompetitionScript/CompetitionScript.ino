@@ -1,33 +1,6 @@
 /*
-    Motion logic:
-    Motion commands (moveForward(), turnLeft(), etc) takes an int variable.
-    This is distance or degrees, they take a velocity constant that we
-    tune, find time with d/v, turn the motors on, delay for time, then
-    turn motors off.
-
-    Notes:
-    QList library required, you can add it in Arduino Library Manager.
-
-    Motor controller must be powered off battery pack (9v), battery pack
-    must be turned on even when plugged in to a computer. This is why the
-    robot just stopped working when we were testing at school.
-    
-    I figured out why the the people who made the example code wrote the
-    code the way they did, it's actually ingenious. However it is super
-    complicated and we don't have time to validate everything, so I wrote
-    a simpler motion logic system.
-
-    >> After you press start, pressing the button WON'T stop the robot! <<
-    Just turn off the power if you need to.
-    
-    I was too lazy to write a custom data structure to store methods as
-    commands, so instead the command queue uses the same system as on the 
-    example code where it stores int values that a switch statement then
-    references for the actual method. cmdQueue stores the command,
-    paramQueue stores the parameters fed to each command.
-
-    C++ queues use push() to add and pop() to remove. pop() does NOT 
-    return the value, you have to use front() to get the first value.
+    IMPORTANT! Only one file can be opened during the competition. Programming notes have been
+    moved to the bottom of this file. Add any competition notes you want at the top here.
 */
 
 /*
@@ -396,3 +369,43 @@ void distanceTester()
         }
     }
 }
+
+/*
+    Programming Notes:
+    Motion logic:
+    Motion commands (moveForward(), turnLeft(), etc) takes an int variable.
+    This is distance or degrees, they take a velocity constant that we
+    tune, find time with d/v, turn the motors on, delay for time, then
+    turn motors off.
+
+    Notes:
+    QList library required, you can add it in Arduino Library Manager.
+
+    Motor controller must be powered off battery pack (9v), battery pack
+    must be turned on even when plugged in to a computer. This is why the
+    robot just stopped working when we were testing at school.
+    
+    I figured out why the the people who made the example code wrote the
+    code the way they did, it's actually ingenious. However it is super
+    complicated and we don't have time to validate everything, so I wrote
+    a simpler motion logic system.
+
+    >> After you press start, pressing the button WON'T stop the robot! <<
+    Just turn off the power if you need to.
+    
+    I was too lazy to write a custom data structure to store methods as
+    commands, so instead the command queue uses the same system as on the 
+    example code where it stores int values that a switch statement then
+    references for the actual method. cmdQueue stores the command,
+    paramQueue stores the parameters fed to each command.
+
+    C++ queues use push() to add and pop() to remove. pop() does NOT 
+    return the value, you have to use front() to get the first value.
+
+    - C++ queues uses push() and pop(), pop() does not return the object, it only removes it from the queue
+    - #define saves memory over const int (C++ version of final)
+    - float saves memory over double but can't store as much data
+    - a method and variable can't have the same name in local reference
+    - use fabs() for absolute value of float
+    - use GitHub copilot
+*/
