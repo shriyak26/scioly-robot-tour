@@ -90,8 +90,9 @@ void setup()
 
     // BEGIN SETUP
     // commands go here
-    // add(FORWARD);
+    add(FORWARD);
     add(TURN_RIGHT);
+    add(MOVE_TIL,20);
 
     // must be last!
     add(STOP);
