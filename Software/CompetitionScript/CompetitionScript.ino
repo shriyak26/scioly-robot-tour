@@ -1,15 +1,28 @@
 /*
     IMPORTANT! Only one file can be opened during the competition. Programming notes have been
     moved to the bottom of this file. Add any competition notes you want at the top here.
+
+    150 mm TO BLOCK FOR MOVE TIL
+    650 mm for one space in between
 */
+#define ONE_SPACE       200
+#define TWO_SPACE       800
 
 /*
     IMPORTANT! Use these to adjust distance and turning times.
     Individual command parameters currently do not work.
 */
-#define STRAIGHT_DELAY  3000
-#define TURN_DELAY      600
+#define STRAIGHT_DELAY  1220
+#define STRAIGHT_HALF   500
+#define STRAIGHT_SPECIAL  600
+#define TURN_DELAY      380
 
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <I2Cdev.h>
+
+#define MPU6050_ADDR 0x68
 
 
 #include <QList.h>
@@ -45,12 +58,15 @@ QList<float> paramQueue;
 #define MOVE_TIL    14
 #define BACKWARD    15
 #define TEST        16
+#define FORWARD_HALF 17
+#define FORWARD_SPECIAL 18
 #define STOP        1
+#define WAIT        2
 
 // PWM values for straight and turning, 0 = min, 255 = max
 #define START_PWM       50
-#define STRAIGHT_PWM    100
-#define TURN_PWM        65
+#define STRAIGHT_PWM    80
+#define TURN_PWM        70
 
 #define ACCEL_DELAY     10000
 #define ACCEL_DELAY_2   1000
@@ -87,11 +103,31 @@ void setup()
 
     // must be first!
     add(START_WAIT);
+    add(WAIT);
 
     // BEGIN SETUP
     // commands go here
+    // add(FORWARD_SPECIAL);
+    // add(FORWARD_HALF);
+    // add(TURN_RIGHT);
     // add(FORWARD);
+    
+    add(MOVE_TIL,ONE_SPACE);
+    add(TURN_LEFT);
+    add(FORWARD);
     add(TURN_RIGHT);
+    add(MOVE_TIL,ONE_SPACE);
+    add(TURN_RIGHT);
+    add(MOVE_TIL,ONE_SPACE);
+    add(TURN_LEFT);
+    add(MOVE_TIL,ONE_SPACE);
+    add(TURN_LEFT);
+    add(FORWARD);
+    add(TURN_LEFT);
+    add(MOVE_TIL,TWO_SPACE);
+    add(TURN_LEFT);
+    add(MOVE_TIL,ONE_SPACE);
+    /**/
 
     // must be last!
     add(STOP);
@@ -130,11 +166,19 @@ void loop()
             moveBackward(currentParam);
             break;
         case TEST :
-            distanceTester();
+            break;
+        case FORWARD_HALF :
+            moveHalf(currentParam);
+            break;
+        case FORWARD_SPECIAL :
+            moveSpecial(currentParam);
             break;
         case STOP :
             status = false;
             setup();
+        case WAIT :
+            delay(1000);
+            break;
         default :
             status = false;
     }
@@ -167,10 +211,25 @@ void setSpeed(int speed)
     analogWrite(motor1PWMPin, speed);
     analogWrite(motor2PWMPin, speed);
 }
+
+void setSpeedDecel(int speed)
+{
+    analogWrite(motor1PWMPin, speed);
+    analogWrite(motor2PWMPin, speed);
+
+}
+
+void setSpeedTurn(int speed)
+{
+    analogWrite(motor1PWMPin, speed);
+    analogWrite(motor2PWMPin, speed);
+}
+
 // moves forward for distance (mm)
 void moveForward(float distance)
 {
     int speed = STRAIGHT_PWM;
+    setSpeed(speed);
     
     motorForward();
     
@@ -181,16 +240,58 @@ void moveForward(float distance)
     while(speed > ACCEL_STOP)
     {
         delayMicroseconds(ACCEL_DELAY);
-        setSpeed(--speed);
+        setSpeedDecel(--speed);
     }
 
     motorStop();
+
+    delay(2000);
+}
+
+void moveHalf(float distance)
+{
+    int speed = STRAIGHT_PWM;
+    setSpeed(speed);
+    motorForward();
+
+    delay(STRAIGHT_HALF);
+
+    while(speed > ACCEL_STOP)
+    {
+        delayMicroseconds(ACCEL_DELAY);
+        setSpeedDecel(--speed);
+    }
+
+    motorStop();
+
+    delay(2000);
+}
+
+void moveSpecial(float distance)
+{
+    int speed = STRAIGHT_PWM;
+    setSpeed(speed);
+
+    motorForward();
+
+    delay(STRAIGHT_SPECIAL);
+
+    while(speed > ACCEL_STOP)
+    {
+        delayMicroseconds(ACCEL_DELAY);
+        setSpeedDecel(--speed);
+    }
+
+    motorStop();
+
+    delay(2000);
 }
 
 // moves backward for distance (mm)
 void moveBackward(float distance)
 {
     int speed = STRAIGHT_PWM;
+    setSpeed(speed);
     
     motorBackward();
     
@@ -201,10 +302,12 @@ void moveBackward(float distance)
     while(speed > ACCEL_STOP)
     {
         delayMicroseconds(ACCEL_DELAY);
-        setSpeed(--speed);
+        setSpeedDecel(--speed);
     }
 
     motorStop();
+
+    delay(2000);
 }
 
 // turns left for degrees
@@ -212,7 +315,7 @@ void turnLeft(float degrees)
 {
     int speed = TURN_PWM;
     
-    setSpeed(speed);
+    setSpeedTurn(speed);
 
     // float time = degrees / rotationalVelocity;
     motorLeftForward();
@@ -229,6 +332,8 @@ void turnLeft(float degrees)
     */
 
     motorStop();
+
+    delay(2000);
 }
 
 // turns right for degrees
@@ -236,13 +341,13 @@ void turnRight(float degrees)
 {
     int speed = TURN_PWM;
     
-    setSpeed(speed);
+    setSpeedTurn(speed);
     
     setSpeed(TURN_PWM);
     // float time = degrees / rotationalVelocity;
     motorLeftBackward();
     motorRightForward();
-    delay(TURN_DELAY);
+    delay(TURN_DELAY + 50);
 
     /*
     while(speed > ACCEL_STOP)
@@ -253,6 +358,8 @@ void turnRight(float degrees)
     */
 
     motorStop();
+
+    delay(2000);
 }
 
 // turns both motors on forward
@@ -318,9 +425,9 @@ void moveTil(float distance)
         motorBackward();
     }
     
-    // stop motors when within margin of error (2 mm)
+    // stop motors when within 60 mm
     // to allow for deceleration
-    while((fabs(getDistance() - distance) > 2))
+    while((fabs(getDistance() - distance) > 60))
     {
         delayMicroseconds(1);
     }
@@ -328,10 +435,12 @@ void moveTil(float distance)
     while(speed > ACCEL_STOP)
     {
         delayMicroseconds(ACCEL_DELAY);
-        setSpeed(--speed);
+        setSpeedDecel(speed-=5);
     }
 
     motorStop();
+
+    delay(2000);
 }
 
 float getDistance()
