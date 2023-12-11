@@ -1,6 +1,6 @@
 {
-    "sketch": "Software\\CompetitionScript\\CompetitionScript.ino",
+    "sketch": "Software\\CompetitionScript3\\CompetitionScript3.ino",
     "board": "arduino:avr:uno",
-    "port": "COM33",
+    "port": "COM3",
     "programmer": "avrisp"
 }
