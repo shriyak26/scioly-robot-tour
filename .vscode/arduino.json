@@ -1,6 +1,6 @@
 {
-    "sketch": "Software\\CompetitionScript3\\CompetitionScript3.ino",
-    "board": "arduino:avr:uno",
+    "sketch": "Software\\CompetitionScript4\\CompetitionScript4.ino",
+    "board": "arduino:renesas_uno:unor4wifi",
     "port": "COM3",
-    "programmer": "avrisp"
+    "programmer": "rfp"
 }
