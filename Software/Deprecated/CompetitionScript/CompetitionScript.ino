@@ -9,7 +9,7 @@
 #define TWO_SPACE       800
 
 /*
-    IMPORTANT! Use these to adjust distance and turning times.
+    IMPORTANT! Use these to adjust distance and turnings.
     Individual command parameters currently do not work.
 */
 #define STRAIGHT_DELAY  1220
