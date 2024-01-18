@@ -1,22 +1,33 @@
 
 // Packages
-#include "bsp_api.h"
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
 Adafruit_MotorShield motorShield = Adafruit_MotorShield();
-Adafruit_DCMotor *motorLeft = motorShield.getMotor(1); 
-Adafruit_DCMotor *motorRight = motorShield.getMotor(3); 
+Adafruit_DCMotor *motorL = motorShield.getMotor(1); 
+Adafruit_DCMotor *motorR = motorShield.getMotor(3); 
 
 void setup()
-{
-    
-    motorShield.begin();
-    motorLeft->setSpeed(255);
+{   
+  motorShield.begin();
+  motorL->run(BRAKE);
+  motorR->run(BRAKE);
+  motorL->setSpeed(150);
+  motorR->setSpeed(150);
+  delay(5000);
 }
 
 void loop()
 {
-    motorLeft->run(FORWARD);
+  
 }
+
+// Motor testing
+/*
+  motorL->run(FORWARD);
+  motorR->run(FORWARD);
+  delay(5000);
+  motorL->setSpeed(0);
+  motorR->setSpeed(0);
+*/
