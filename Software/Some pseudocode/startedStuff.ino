@@ -11,6 +11,8 @@
 
 //Define necessary constants
 //...
+//maybe have a constant speed for turning alone, we
+    //would also know then hwo long it takes to turn and have a var for that
 //whats the target time
 //set status to false
 
@@ -96,7 +98,7 @@ void loop()
 //add(cmd)
 /*
 add command to command queue
-add arbitrary param queue
+add arbitrary param to param queue
 */
 
 //add(cmd,param)
@@ -115,11 +117,27 @@ allowing the loop to actually run code
 /*
     using the different commands in the command queue
     calculate how fast you want robot to go
+    do we want different speeds for fwd,bkwd, and turns?
+    im thinking turns should be its own constant speed
+
+    loop thru commands
+        total number of forward and backwards
+        total number of 90 degree turns
+
+    time for one forward backward = 
+    (target time - number of turns * const time it takes to turn) / number of forward backwards
+    speed = distance of on forward backward (.5m? / time for on forward backward
+    
+
+
+
+
+    setSpeed(speed we want)
 */
 
 //setSpeed(speed)
 /*
-set speeds to motors
+set speeds to motors (called by calculate speed usually)
 */
 
 //moveForward(distance)
