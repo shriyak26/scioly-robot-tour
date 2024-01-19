@@ -11,6 +11,9 @@
 
 //Define necessary constants
 //...
+//maybe have a constant speed for turning alone, we
+    //would also know then hwo long it takes to turn and have a var for that
+//whats the target time
 //set status to false
 
 //Define necessary objects (queues and stuff)
@@ -27,6 +30,7 @@ void setup()
     //Commands add here
     /*
     Add START_WAIT command
+    Add CALCULATE_SPEED command
     
     Add every other direction fwd, back, turn, etc.
 
@@ -58,17 +62,20 @@ void loop()
     {
         case START_WAIT:
             break lol dont do anything
+        case CALCULATE_SPEED:
+            calculateSpeed(target time);
+            break;
         case fwd:
             moveForward(currentParam)
-            break
+            break;
         case TURN_LEFT :
             turnLeft(currentParam);
             break;
         case TURN_RIGHT :
             turnRight(currentParam);
             break;
-        case MOVE_TIL :
-            moveTil(currentParam);
+        case MOVE_TIL : //idk if keep?
+            moveTil();
             break;
         case BACKWARD :
             moveBackward(currentParam);
@@ -91,7 +98,7 @@ void loop()
 //add(cmd)
 /*
 add command to command queue
-add arbitrary param queue
+add arbitrary param to param queue
 */
 
 //add(cmd,param)
@@ -106,14 +113,47 @@ if the button is pressed, change the status to true
 allowing the loop to actually run code
 */
 
+//calculateSpeed(target time)
+/*
+    using the different commands in the command queue
+    calculate how fast you want robot to go
+    do we want different speeds for fwd,bkwd, and turns?
+    im thinking turns should be its own constant speed
+
+    loop thru commands
+        total number of forward and backwards
+        total number of 90 degree turns
+
+    time for one forward backward = 
+    (target time - number of turns * const time it takes to turn) / number of forward backwards
+    speed = distance of on forward backward (.5m? / time for on forward backward
+    
+
+
+
+
+    setSpeed(speed we want)
+*/
+
 //setSpeed(speed)
 /*
-set speeds to motors
+set speeds to motors (called by calculate speed usually)
 */
 
 //moveForward(distance)
 /*
+
+hehe...uhhh
+set how many encoder pulses things to get to distance travelled
+1:100, 14 counts per revolution
+1400 encoder pulses per wheel revolution
+wheel diameter 60mm
+
+    idk if we need to account for acceleration decceleration
+
 move forward lol
+    loop constantly calling courseCorrect()
+    until done moving forward ig
 */
 
 //moveBackward(distance)
@@ -134,7 +174,7 @@ turn right lol
 //------actual motors being activated methods--------
 
 //turn both motors on forward
-//motorFroward()
+//motorForward()
 /*
     call left and right motors forward
 */
@@ -172,19 +212,9 @@ write to right motor via pin to go backward
 write to motors to stop
 */
 
-//moveTill(distance)
+//courseCorrect()
+//for as its moving
 /*
-    hehe...uhhh
-    set how many encoder pulses things to get to distance travelled
-    1:100, 14 counts per revolution
-    1400 encoder pulses per wheel revolution
-    wheel diameter 60mm
-
-    idk if we need to account for acceleration decceleration
-*/
-
-//tester()
-/*
-    using the fancy sensor new stuff gyroscope whatever
-    figure out position and stuff
+    if drifting left, make left motor faster in magnitude
+    if drifting right, make right motor faster in magnitude
 */
