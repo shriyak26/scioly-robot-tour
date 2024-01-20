@@ -1,6 +1,7 @@
 {
-    "sketch": "Software\\CompetitionScript4\\CompetitionScript4.ino",
-    "board": "arduino:renesas_uno:unor4wifi",
+    "sketch": "Software/Deprecated/Blink/Blink.ino",
+    "board": "rp2040:rp2040:adafruit_metro",
     "port": "COM3",
-    "programmer": "rfp"
+    "programmer": "rfp",
+    "configuration": "flash=16777216_0,freq=133,opt=Small,rtti=Disabled,stackprotect=Disabled,exceptions=Disabled,dbgport=Disabled,dbglvl=None,usbstack=picosdk,ipbtstack=ipv4only,boot2=boot2_w25q080_2_padded_checksum,uploadmethod=default"
 }
