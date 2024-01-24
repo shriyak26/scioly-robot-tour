@@ -1,6 +1,6 @@
 {
     "sketch": "Software\\CompetitionScript4\\CompetitionScript4.ino",
-    "board": "arduino:renesas_uno:unor4wifi",
+    "board": "rp2040:rp2040:adafruit_metro",
     "port": "COM3",
     "programmer": "rfp"
 }
