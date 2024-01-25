@@ -1,3 +1,15 @@
+/*
+  Pre-Run Checklist
+  1. New batteries
+  2. Cables
+  
+  Timing Reference Sheet
+  Straight:
+  150- 2 seconds
+
+  Turn: 1 second
+*/
+
 // Packages
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
@@ -6,12 +18,13 @@
 #include <Wire.h>
 
 int targetTime = 50; // in seconds
-int DIS1 = 3700; // 3700
+int DIS1 = 7000;     // 3700
 int DIS2 = 7400;
-int TURN90 = 750;
+int TIL1 = 120;
+int TURN90 = 1540;
 int turnTime = 5000; // do not change unless u need to ig
 int startDelay = 2000;
-int movementDelay = 100;
+int movementDelay = 250;
 
 // Pins
 #define sensorRTrigPin 2
@@ -44,15 +57,28 @@ Adafruit_DCMotor *motorR = motorShield.getMotor(2);
 
 bool status, newCommand;
 int targetAngle;
-int defaultSpeed = 250, defaultSpeedTurn = 150;
+int defaultSpeedL = 155, defaultSpeedR = 150, defaultSpeedTurnL = 100,
+    defaultSpeedTurnR = 105;
 int speedL, speedR;
-int distanceTolerance = 10;
+int distanceTolerance = 1;
+int encoderTolerance = 200;
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
 int startEncoderValue = 0;
 int startEncoderValueL = 0;
 int startEncoderValueR = 0;
 bool motorLStopped, motorRStopped;
+bool accelerate;
+bool deccelerate;
+int accelerateRate = 1;
+int targetSpeedL = defaultSpeedL;
+int targetSpeedR = defaultSpeedR;
+int startSpeedL = 80;
+int startSpeedR = 80;
+
+// timing test
+int startTime;
+int endTime;
 
 // command queues
 ArduinoQueue<int> commandQueue(50);
@@ -85,7 +111,8 @@ void setup() {
   pinMode(buttonPin, INPUT_PULLUP);
 
   // initialize ultrasonic distance sensor pins
-  //...
+  pinMode(sensorLTrigPin, OUTPUT);
+  pinMode(sensorLEchoPin, INPUT);
 
   // blink when ready to start after calibration?
 
@@ -104,15 +131,42 @@ void setup() {
   // must be first!
   add(START);
 
-  add(FD,DIS1);
-  // add(RTE,TURN90);
+  add(FDT,TIL1);
+  /*
+  add(FD, DIS1);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(FD, DIS1);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  /**/
+  /*
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  /**/
+  /*
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  /**/
 
   // must be last!
   add(STOP);
 
   pinMode(LED_BUILTIN, OUTPUT);
-  
-  for(int i = 0; i < 3; i++) {
+
+  for (int i = 0; i < 3; i++) {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(200);
     digitalWrite(LED_BUILTIN, LOW);
@@ -137,11 +191,10 @@ void loop() {
       commandQueue.dequeue();
       paramQueue.dequeue();
       newCommand = true;
-      /*
-      delay(100);
-      digitalWrite(LED_BUILTIN,HIGH);
-      delay(500);
-      digitalWrite(LED_BUILTIN,LOW);
+      /**/
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(200);
+      digitalWrite(LED_BUILTIN, LOW);
       /**/
       delay(startDelay);
       /**/
@@ -149,14 +202,15 @@ void loop() {
     case FD:
       // move forward
       if (newCommand) {
-        speedL = defaultSpeed;
-        speedR = defaultSpeed;
+        speedL = targetSpeedL;
+        speedR = targetSpeedR;
         updateSpeed();
         startEncoderValue = encoderValueL;
         startEncoderValueL = encoderValueL;
         startEncoderValueR = encoderValueR;
         motorForward();
         newCommand = false;
+        // startTime = millis();
       } else {
         if (encoderValueL > (startEncoderValue - currentParam)) {
           // courseCorrect();
@@ -173,8 +227,9 @@ void loop() {
     case BD:
       // move backward
       if (newCommand) {
-        speedL = defaultSpeed;
-        speedR = defaultSpeed;
+        speedL = defaultSpeedL;
+        speedR = defaultSpeedR;
+
         updateSpeed();
         startEncoderValue = encoderValueL;
         startEncoderValueL = encoderValueL;
@@ -183,7 +238,7 @@ void loop() {
         newCommand = false;
       } else {
         if (encoderValueL > (startEncoderValue + currentParam)) {
-          courseCorrectBackward();
+          // courseCorrectBackward();
         } else {
           motorStop();
           commandQueue.dequeue();
@@ -196,8 +251,8 @@ void loop() {
     case FDT:
       // move forward
       if (newCommand) {
-        speedL = defaultSpeed;
-        speedR = defaultSpeed;
+        speedL = defaultSpeedL;
+        speedR = defaultSpeedR;
         updateSpeed();
         startEncoderValueL = encoderValueL;
         startEncoderValueR = encoderValueR;
@@ -205,9 +260,12 @@ void loop() {
         newCommand = false;
       } else {
         // for now just use one sensor
-        if (getDistance() - currentParam > distanceTolerance) {
-          courseCorrect();
+        float distance = getDistance();
+        if (distance - currentParam > distanceTolerance) {
+          // courseCorrect();
+          Serial.println(distance);
         } else {
+          Serial.println(distance);
           motorStop();
           commandQueue.dequeue();
           paramQueue.dequeue();
@@ -219,8 +277,8 @@ void loop() {
     case BDT:
       // move backward
       if (newCommand) {
-        speedL = defaultSpeed;
-        speedR = defaultSpeed;
+        speedL = defaultSpeedL;
+        speedR = defaultSpeedR;
         updateSpeed();
         startEncoderValueL = encoderValueL;
         startEncoderValueR = encoderValueR;
@@ -228,7 +286,7 @@ void loop() {
         newCommand = false;
       } else {
         if (getDistance() - currentParam < -distanceTolerance) {
-          courseCorrectBackward();
+          // courseCorrectBackward();
         } else {
           motorStop();
           commandQueue.dequeue();
@@ -238,112 +296,102 @@ void loop() {
         }
       }
       break;
-    /*
-    case RT:
-      // turn right
-      if (newCommand) {
-        speedL = defaultSpeedTurn;
-        speedRight = defaultSpeedTurn;
-        updateSpeed();
+      /*
+      case RT:
+        // turn right
+        if (newCommand) {
+          speedL = defaultSpeedTurnL;
+          speedR = defaultSpeedTurnR;
+          updateSpeed();
 
-        targetAngle += 90;
+          targetAngle += 90;
 
-        turnRight();
-        newCommand = false;
-      } else {
-        // Serial.println(MPU.getAngleZ());
-        if (MPU.getAngleZ() - targetAngle + TURN_CALIBRATE > ANGLE_TOLERANCE) {
-          turnLeft();
-          MPU.update();
-        } else if (MPU.getAngleZ() - targetAngle + TURN_CALIBRATE <
-                   -ANGLE_TOLERANCE) {
           turnRight();
-          MPU.update();
+          newCommand = false;
         } else {
-          motorStop();
-          commandQueue.dequeue();
-          paramQueue.dequeue();
-          newCommand = true;
-          targetAngle -= ANGLE_CALIBRATE;
-          delay(movementDelay);
+          // Serial.println(MPU.getAngleZ());
+          if (MPU.getAngleZ() - targetAngle + TURN_CALIBRATE > ANGLE_TOLERANCE)
+      { turnLeft(); MPU.update(); } else if (MPU.getAngleZ() - targetAngle +
+      TURN_CALIBRATE < -ANGLE_TOLERANCE) { turnRight(); MPU.update(); } else {
+            motorStop();
+            commandQueue.dequeue();
+            paramQueue.dequeue();
+            newCommand = true;
+            targetAngle -= ANGLE_CALIBRATE;
+            delay(movementDelay);
+          }
         }
-      }
-      break;
-    case LT:
-      // turn left
-      if (newCommand) {
-        speedL = defaultSpeedTurn;
-        speedRight = defaultSpeedTurn;
-        updateSpeed();
+        break;
+      case LT:
+        // turn left
+        if (newCommand) {
+          speedL = defaultSpeedTurnL;
+          speedR = defaultSpeedTurnR;
+          updateSpeed();
 
-        targetAngle -= 90;
+          targetAngle -= 90;
 
-        turnLeft();
-        newCommand = false;
-      } else {
-        if (MPU.getAngleZ() - targetAngle - TURN_CALIBRATE > ANGLE_TOLERANCE) {
           turnLeft();
-          MPU.update();
-        } else if (MPU.getAngleZ() - targetAngle - TURN_CALIBRATE <
-                   -ANGLE_TOLERANCE) {
-          turnRight();
-          MPU.update();
+          newCommand = false;
         } else {
-          motorStop();
-          commandQueue.dequeue();
-          paramQueue.dequeue();
-          newCommand = true;
-          targetAngle += ANGLE_CALIBRATE;
-          delay(movementDelay);
+          if (MPU.getAngleZ() - targetAngle - TURN_CALIBRATE > ANGLE_TOLERANCE)
+      { turnLeft(); MPU.update(); } else if (MPU.getAngleZ() - targetAngle -
+      TURN_CALIBRATE < -ANGLE_TOLERANCE) { turnRight(); MPU.update(); } else {
+            motorStop();
+            commandQueue.dequeue();
+            paramQueue.dequeue();
+            newCommand = true;
+            targetAngle += ANGLE_CALIBRATE;
+            delay(movementDelay);
+          }
         }
-      }
-      break; */
+        break; */
       /**/
     case RTE:
       // turn right with encoders
       if (newCommand) {
-        speedL = defaultSpeedTurn;
-        speedR = defaultSpeedTurn;
+        speedL = defaultSpeedTurnL;
+        speedR = defaultSpeedTurnR;
         updateSpeed();
         startEncoderValueL = encoderValueL;
         startEncoderValueR = encoderValueR;
         motorRight();
         newCommand = false;
       } else {
-
-        if (encoderValueL <= (startEncoderValue - currentParam)) {
+        if (encoderValueL <= (startEncoderValueL - currentParam)) {
           motorStopL();
           motorLStopped = true;
         }
-        if (encoderValueR <= (startEncoderValue - currentParam)) {
+        if (encoderValueR <= (startEncoderValueR - currentParam)) {
           motorStopR();
           motorRStopped = true;
         }
         if (motorLStopped && motorRStopped) {
           commandQueue.dequeue();
           paramQueue.dequeue();
-        motorLStopped = false;
-        motorRStopped = false;
-        newCommand = true;
-        delay(movementDelay);
+          motorLStopped = false;
+          motorRStopped = false;
+          newCommand = true;
+          delay(movementDelay);
         }
       }
-    break;
+      break;
     case LTE:
       // turn left with encoders
       if (newCommand) {
-        speedL = defaultSpeedTurn;
-        speedR = defaultSpeedTurn;
+        speedL = defaultSpeedTurnL;
+        speedR = defaultSpeedTurnR;
         updateSpeed();
-        startEncoderValue = encoderValueL;
+        startEncoderValueL = encoderValueL;
+        startEncoderValueR = encoderValueR;
         motorLeft();
         newCommand = false;
       } else {
-        if (encoderValueL >= (startEncoderValue + currentParam)) {
+        if (encoderValueL >= (startEncoderValueL + currentParam)) {
           motorStopL();
           motorLStopped = true;
         }
-        if (encoderValueR >= (startEncoderValue + currentParam)) {
+        if (encoderValueR >= (startEncoderValueR + currentParam)) {
           motorStopR();
           motorRStopped = true;
         }
@@ -361,7 +409,7 @@ void loop() {
       motorStop();
       break;
     }
-  }/**/
+  } /**/
 }
 
 void add(int cmd) { add(cmd, 0); }
@@ -372,8 +420,7 @@ void add(int cmd, int param) {
 }
 
 void checkButton() {
-  if (digitalRead(buttonPin) == LOW)
-  {
+  if (digitalRead(buttonPin) == LOW) {
     status = !status;
   }
 }
@@ -386,19 +433,23 @@ void checkButton() {
 
 // course correct forward
 // currently for encoders, compare encoders see if match
+/*
 void courseCorrect() {
   // drifting right
   if (startEncoderValueL - encoderValueL > encoderValueR - startEncoderValueR) {
     // speed up right motor
     speedR = defaultSpeed + ((startEncoderValueL - encoderValueL) -
-             (encoderValueR - startEncoderValueR)) / 100;
+                             (encoderValueR - startEncoderValueR)) /
+                                100;
     updateSpeed();
   }
   // drifting left
   else if (startEncoderValueL - encoderValueL <
            encoderValueR - startEncoderValueR) {
     // slow down right motor
-    speedR = defaultSpeed - ((encoderValueR - startEncoderValueR) - (startEncoderValueL - encoderValueL)) / 100;
+    speedR = defaultSpeed - ((encoderValueR - startEncoderValueR) -
+                             (startEncoderValueL - encoderValueL)) /
+                                100;
     updateSpeed();
   }
 }
@@ -414,10 +465,12 @@ void courseCorrectBackward() {
   // drifting left
   if (encoderValueL - startEncoderValueL < startEncoderValueR - encoderValueR) {
     // decrease right speed
-    speedR = defaultSpeed - ((encoderValueR - startEncoderValueR) - (startEncoderValueL - encoderValueL));
+    speedR = defaultSpeed - ((encoderValueR - startEncoderValueR) -
+                             (startEncoderValueL - encoderValueL));
     updateSpeed();
   }
 }
+/**/
 
 void updateEncoderL() {
   int MSB = digitalRead(encoderLPinA); // MSB = most significant bit
@@ -457,13 +510,11 @@ void updateSpeed() {
 }
 
 void motorForward() {
-  updateSpeed();
   motorL->run(FORWARD);
   motorR->run(FORWARD);
 }
 
 void motorBackward() {
-  updateSpeed();
   motorL->run(BACKWARD);
   motorR->run(BACKWARD);
 }
@@ -471,11 +522,15 @@ void motorBackward() {
 void motorRight() {
   motorL->run(FORWARD);
   motorR->run(BACKWARD);
+  motorLStopped = false;
+  motorRStopped = false;
 }
 
 void motorLeft() {
   motorL->run(BACKWARD);
   motorR->run(FORWARD);
+  motorLStopped = false;
+  motorRStopped = false;
 }
 
 void motorStop() {
@@ -500,10 +555,10 @@ float getDistance() {
   digitalWrite(sensorLTrigPin, LOW);
 
   float duration = pulseIn(sensorLEchoPin, HIGH);
-
+  float distance = duration * 0.343 / 2;
   // 0.343: speed of sound in mm/microsecond
   // 2: round trip of sound
-  return duration * 0.343 / 2;
+  return distance;
   ;
 }
 
@@ -537,4 +592,49 @@ void calculateSpeed() {
   delay(5000);
   motorL->setSpeed(0);
   motorR->setSpeed(0);
+*/
+
+/*
+case FD:
+  // move forward
+  if (newCommand) {
+    speedL = startSpeedL;
+    speedR = startSpeedR;
+    accelerate = true;
+    updateSpeed();
+    startEncoderValue = encoderValueL;
+    startEncoderValueL = encoderValueL;
+    startEncoderValueR = encoderValueR;
+    motorForward();
+    newCommand = false;
+  } else {
+    if (encoderValueL > (startEncoderValue - currentParam)) {
+      // courseCorrect();
+      if (accelerate) {
+        speedL += accelerateRate;
+        speedR += accelerateRate;
+        updateSpeed();
+        if (speedL >= targetSpeedL) {
+          accelerate = false;
+        }
+      } else if (encoderValueL - encoderTolerance >= (startEncoderValue - currentParam)) {
+        deccelerate = true;
+      }
+      if (deccelerate) {
+        speedL -= accelerateRate;
+        speedR -= accelerateRate;
+        updateSpeed();
+        if (speedL <= startSpeedL) {
+          deccelerate = false;
+        }
+      }
+    } else {
+      motorStop();
+      commandQueue.dequeue();
+      paramQueue.dequeue();
+      newCommand = true;
+      delay(movementDelay);
+    }
+  }
+  break;
 */

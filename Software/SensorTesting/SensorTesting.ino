@@ -1,5 +1,5 @@
-#define sensorTrigPin   12
-#define sensorEchoPin   11
+#define sensorTrigPin   4
+#define sensorEchoPin   5
 
 void setup() {
     pinMode(sensorTrigPin, OUTPUT);
