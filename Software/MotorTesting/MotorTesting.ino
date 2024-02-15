@@ -15,12 +15,13 @@ Adafruit_DCMotor *motorR = motorShield.getMotor(2);
 
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
+volatile long encodeTest = 0;
 
 void setup()
 {
   motorShield.begin();
   motorL->setSpeed(200);
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // calculateSpeed();
   // delay(5000);
@@ -36,7 +37,7 @@ void setup()
   digitalWrite(encoderRPinA, HIGH);
   digitalWrite(encoderRPinB, HIGH);
 
-  attachInterrupt(digitalPinToInterrupt(encoderLPinA), updateEncoderL, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderLPinA), updateA, HIGH);
   attachInterrupt(digitalPinToInterrupt(encoderLPinB), updateEncoderL, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderRPinA), updateEncoderR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderRPinB), updateEncoderR, CHANGE);
@@ -44,18 +45,27 @@ void setup()
 
 void loop()
 {
+  Serial.println("bye");
   motorL->run(FORWARD);
-  for(int i = 0; i < 5000; i++)
+
+  /*
+  for(int i = 0; i < 500; i++)
   {
-    Serial.println(encoderValueL);
+    
     delay(1);
   }
+  */
+  delay(100);
 
   motorL->setSpeed(0);
   while(true)
   {
     delay(100);
   }
+}
+
+void updateA() {
+  Serial.println("hi");
 }
 
 void updateEncoderL() {
