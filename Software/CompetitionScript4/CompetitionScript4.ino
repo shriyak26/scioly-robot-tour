@@ -21,10 +21,14 @@ int targetTime = 50; // in seconds
 int DIS1 = 7000;     // 3700
 int DIS2 = 7400;
 int TIL1 = 120;
-int TURN90 = 1540;
+int TURN90 = 865;
 int turnTime = 5000; // do not change unless u need to ig
 int startDelay = 2000;
-int movementDelay = 250;
+int movementDelay = 500;
+
+// temporary fix
+int rightTrim = 0;
+int turnCount = 0;
 
 // Pins
 #define sensorRTrigPin 2
@@ -57,16 +61,17 @@ Adafruit_DCMotor *motorR = motorShield.getMotor(2);
 
 bool status, newCommand;
 int targetAngle;
-int defaultSpeedL = 155, defaultSpeedR = 150, defaultSpeedTurnL = 100,
-    defaultSpeedTurnR = 105;
+int defaultSpeedL = 155, defaultSpeedR = 150, defaultSpeedTurnL = 50,
+    defaultSpeedTurnR = 50;
 int speedL, speedR;
 int distanceTolerance = 1;
 int encoderTolerance = 200;
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
+long encoderValueLAbs = 0, encoderValueRAbs = 0;
 int startEncoderValue = 0;
-int startEncoderValueL = 0;
-int startEncoderValueR = 0;
+long startEncoderValueL = 0;
+long startEncoderValueR = 0;
 bool motorLStopped, motorRStopped;
 bool accelerate;
 bool deccelerate;
@@ -86,7 +91,7 @@ ArduinoQueue<int> paramQueue(50);
 
 void setup() {
   motorShield.begin();
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // calculateSpeed();
   // delay(5000);
@@ -131,7 +136,24 @@ void setup() {
   // must be first!
   add(START);
 
-  add(FDT,TIL1);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(RTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+  add(LTE, TURN90);
+
+  // add(FDT,TIL1);
   /*
   add(FD, DIS1);
   add(RTE, TURN90);
@@ -188,10 +210,11 @@ void loop() {
       break;
     case START:
       // start
+      Serial.println("hi");
       commandQueue.dequeue();
       paramQueue.dequeue();
       newCommand = true;
-      /**/
+      /*
       digitalWrite(LED_BUILTIN, HIGH);
       delay(200);
       digitalWrite(LED_BUILTIN, LOW);
@@ -350,21 +373,26 @@ void loop() {
     case RTE:
       // turn right with encoders
       if (newCommand) {
-        speedL = defaultSpeedTurnL;
+        speedL = defaultSpeedTurnL + 1;
         speedR = defaultSpeedTurnR;
         updateSpeed();
-        startEncoderValueL = encoderValueL;
-        startEncoderValueR = encoderValueR;
         motorRight();
+        if (turnCount == 0)
+        {
+          encoderValueL = encoderValueLAbs - 40;
+          encoderValueR = encoderValueRAbs - 40;
+        }
         newCommand = false;
       } else {
-        if (encoderValueL <= (startEncoderValueL - currentParam)) {
+        if (encoderValueL <= (encoderValueLAbs - currentParam - rightTrim)) {
           motorStopL();
           motorLStopped = true;
+          encoderValueLAbs-= currentParam;
         }
-        if (encoderValueR <= (startEncoderValueR - currentParam)) {
+        if (encoderValueR <= (encoderValueRAbs - currentParam - rightTrim)) {
           motorStopR();
           motorRStopped = true;
+          encoderValueRAbs-= currentParam;
         }
         if (motorLStopped && motorRStopped) {
           commandQueue.dequeue();
@@ -372,7 +400,9 @@ void loop() {
           motorLStopped = false;
           motorRStopped = false;
           newCommand = true;
+          Serial.println(encoderValueR);
           delay(movementDelay);
+          turnCount = 1;
         }
       }
       break;
@@ -382,18 +412,23 @@ void loop() {
         speedL = defaultSpeedTurnL;
         speedR = defaultSpeedTurnR;
         updateSpeed();
-        startEncoderValueL = encoderValueL;
-        startEncoderValueR = encoderValueR;
         motorLeft();
+        if (turnCount == 1)
+        {
+          encoderValueL = encoderValueLAbs + 20;
+          encoderValueR = encoderValueRAbs + 20;
+        }
         newCommand = false;
       } else {
-        if (encoderValueL >= (startEncoderValueL + currentParam)) {
+        if (encoderValueL >= (encoderValueLAbs + currentParam)) {
           motorStopL();
           motorLStopped = true;
+          encoderValueLAbs+= currentParam;
         }
-        if (encoderValueR >= (startEncoderValueR + currentParam)) {
+        if (encoderValueR >= (encoderValueRAbs + currentParam)) {
           motorStopR();
           motorRStopped = true;
+          encoderValueRAbs+= currentParam;
         }
         if (motorLStopped && motorRStopped) {
           motorStop();
@@ -401,6 +436,7 @@ void loop() {
           paramQueue.dequeue();
           newCommand = true;
           delay(movementDelay);
+          turnCount = 0;
         }
       }
       break;

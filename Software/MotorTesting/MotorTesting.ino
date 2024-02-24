@@ -21,6 +21,7 @@ void setup()
 {
   motorShield.begin();
   motorL->setSpeed(200);
+  motorR->setSpeed(200);
   Serial.begin(115200);
 
   // calculateSpeed();
@@ -37,7 +38,7 @@ void setup()
   digitalWrite(encoderRPinA, HIGH);
   digitalWrite(encoderRPinB, HIGH);
 
-  attachInterrupt(digitalPinToInterrupt(encoderLPinA), updateA, HIGH);
+  attachInterrupt(digitalPinToInterrupt(encoderLPinA), updateEncoderL, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderLPinB), updateEncoderL, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderRPinA), updateEncoderR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderRPinB), updateEncoderR, CHANGE);
@@ -46,18 +47,20 @@ void setup()
 void loop()
 {
   Serial.println("bye");
-  motorL->run(FORWARD);
+  motorR->run(FORWARD);
 
-  /*
-  for(int i = 0; i < 500; i++)
+  /**/
+  for(int i = 0; i < 1000; i++)
   {
-    
+    Serial.println(encoderValueR);
     delay(1);
   }
-  */
+  /**/
   delay(100);
 
   motorL->setSpeed(0);
+  motorR->setSpeed(0);
+
   while(true)
   {
     delay(100);
