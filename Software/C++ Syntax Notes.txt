@@ -1,3 +1,5 @@
+outdated as of v2
+
 - C++ queues uses push() and pop(), pop() does not return the object, it only removes it from the queue
 - #define saves memory over const int (C++ version of final)
 - float saves memory over double but can't store as much data
