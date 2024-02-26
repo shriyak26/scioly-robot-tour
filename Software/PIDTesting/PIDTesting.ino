@@ -17,11 +17,26 @@ volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
 volatile long encodeTest = 0;
 
+// for PID control
+long previousTimeL = 0;
+float ePreviousL = 0;
+float eIntegralL = 0;
+long previousTimeR = 0;
+float ePreviousR = 0;
+float eIntegralR = 0;
+
+// PID gains
+float kp = 2.0;
+float kd = 0.05;
+float ki = 0;
+
+int param = -10000;
+
 void setup()
 {
   motorShield.begin();
-  motorL->setSpeed(20);
-  motorR->setSpeed(20);
+  motorL->setSpeed(255);
+  motorR->setSpeed(255);
   Serial.begin(115200);
 
   // calculateSpeed();
@@ -46,32 +61,104 @@ void setup()
 
 void loop()
 {
-  Serial.println("bye");
-  motorL->run(FORWARD);
-  motorR->run(FORWARD);
-
-  /**/
-  for(int i = 0; i < 1000; i++)
+  if (fabs(encoderValueL - param) > 1 || fabs(encoderValueR - param) > 1)
   {
-    Serial.print(encoderValueL);
-    Serial.print(" ");
+    pidPositionMatchLeft(param);
+    pidPositionMatchRight(param);
+    Serial.print(param);
+    Serial.print(", ");
+    Serial.println(encoderValueL);
+    Serial.print(", ");
     Serial.println(encoderValueR);
-    delay(1);
   }
-  /**/
-  delay(100);
-
-  motorL->setSpeed(0);
-  motorR->setSpeed(0);
-
-  while(true)
+  else
   {
-    delay(100);
+    motorL->setSpeed(0);
+    motorR->setSpeed(0);
+    delay(10);
   }
 }
 
-void updateA() {
-  Serial.println("hi");
+float pidPositionMatchCalculateLeft(int target, float kp, float kd, float ki) {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeL)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = encoderValueL - target;
+  float eDerivative = (e - ePreviousL) / deltaT;
+  eIntegralL = eIntegralL + e * deltaT;
+
+  // compute PID control signal
+  float u = (kp * e) + (kd * eDerivative) + (ki * eIntegralL);
+
+  previousTimeL = currentTime;
+  ePreviousL = e;
+
+  return u;
+}
+
+float pidPositionMatchCalculateRight(int target, float kp, float kd, float ki) {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeR)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = encoderValueR - target;
+  float eDerivative = (e - ePreviousR) / deltaT;
+  eIntegralR = eIntegralR + e * deltaT;
+
+  // compute PID control signal
+  float u = (kp * e) + (kd * eDerivative) + (ki * eIntegralR);
+
+  previousTimeR = currentTime;
+  ePreviousR = e;
+
+  return u;
+}
+
+void pidPositionMatchLeft(int target) {
+  float u = pidPositionMatchCalculateLeft(target, kp, kd, ki);
+  float speed = fabs(u);
+
+  if (speed > 100) {
+    speed = 100;
+  }
+  else if (speed < 20) {
+    speed = 0;
+  }
+
+  motorL->setSpeed(speed);
+
+  if (u < 0) {
+    
+    motorL->run(BACKWARD);
+  }
+  else {
+    motorL->run(FORWARD);
+  }
+}
+
+void pidPositionMatchRight(int target) {
+  float u = pidPositionMatchCalculateRight(encoderValueL, kp, kd, ki);
+  float speed = fabs(u);
+
+  if (speed > 150) {
+    speed = 150;
+  }
+  else if (speed < 20) {
+    speed = 0;
+  }
+
+  motorR->setSpeed(speed);
+
+  if (u > 0) {
+    
+    motorR->run(BACKWARD);
+  }
+  else {
+    motorR->run(FORWARD);
+  }
 }
 
 void updateEncoderL() {
