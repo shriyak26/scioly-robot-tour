@@ -19,17 +19,18 @@
 #include <Wire.h>
 
 int targetTime = 50; // in seconds
-int DIS1 = 7000;     // 3700
+int DIS1 = 22000;     // 3700
 int DIS2 = 7400;
 int TIL1 = 120;
 int TURN90 = 4650;
 int turnTime = 4800; // do not change unless u need to ig
 int startDelay = 2000;
-int movementDelay = 500;
+int movementDelay = 250;
+
+int linearSpeedLimit = 200;
 
 // temporary fix
-int rightTrim = 0;
-int turnCount = 0;
+int rightTrim = 5;
 
 // Pins
 #define sensorRTrigPin 2
@@ -68,10 +69,9 @@ Adafruit_DCMotor *motorR = motorShield.getMotor(2);
 #define ABORT 99 // abort program
 
 bool status, newCommand;
-int targetAngle = 0, orientation = 0;
-int defaultSpeedL = 155, defaultSpeedR = 150, defaultSpeedTurnL = 50,
-    defaultSpeedTurnR = 50;
-int speedL, speedR;
+int targetAngle = 0;
+float orientation = 0.0;
+int defaultSpeedL = 155, defaultSpeedR = 150;
 int turnSpeedLimit = 100;
 int distanceTolerance = 1;
 int encoderTolerance = 1;
@@ -79,10 +79,6 @@ int directionTolerance = 1;
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
 long encoderValueLAbs = 0, encoderValueRAbs = 0;
-int startEncoderValue = 0;
-long startEncoderValueL = 0;
-long startEncoderValueR = 0;
-bool motorLStopped, motorRStopped;
 bool accelerate;
 bool deccelerate;
 int accelerateRate = 1;
@@ -95,6 +91,7 @@ int startSpeedR = 80;
 long previousTimeL = 0;
 float ePreviousL = 0;
 float eIntegralL = 0;
+
 long previousTimeR = 0;
 float ePreviousR = 0;
 float eIntegralR = 0;
@@ -104,9 +101,11 @@ float kpL = 2.0;
 float kdL = 0.05;
 float kiL = 0.0;
 
-float kpR = 3.0;
+float kpR = 5.0;
 float kdR = 0.05;
 float kiR = 0.01;
+
+float kpLinear = 4.0;
 
 // timing test
 int startTime;
@@ -184,11 +183,6 @@ void setup() {
   pinMode(sensorLTrigPin, OUTPUT);
   pinMode(sensorLEchoPin, INPUT);
 
-  // blink when ready to start after calibration?
-
-  motorLStopped = false;
-  motorRStopped = false;
-
   newCommand = true;
 
   status = false;
@@ -200,10 +194,19 @@ void setup() {
   // must be first!
   add(START);
 
-  add(LT);
-  add(LT);
-  add(LT);
-  add(LT);
+  // add(FD, 50000);
+
+  /**/
+  add(FD, DIS1);
+  add(RT);
+  add(FD, DIS1);
+  add(RT);
+  add(FD, DIS1);
+  add(RT);
+  add(FD, DIS1);
+  add(RT);
+  /**/
+  /*
   add(LT);
   add(LT);
   add(LT);
@@ -214,32 +217,27 @@ void setup() {
   add(RT);
   add(RT);
   add(RT);
-  add(RT);
-  add(RT);
+  add(LT);
+  add(LT);
+  /**/
 
   // add(FDT,TIL1);
   /*
-  add(FD, DIS1);
-  add(RTE, TURN90);
-  add(RTE, TURN90);
-  add(FD, DIS1);
-  add(LTE, TURN90);
-  add(LTE, TURN90);
   /**/
 
   // must be last!
   add(STOP);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-
+  // blink for ready to begin
   for (int i = 0; i < 3; i++) {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(200);
     digitalWrite(LED_BUILTIN, LOW);
     delay(200);
   }
+  digitalWrite(LED_BUILTIN, HIGH);
 
-  Serial.println(targetAngle);
+  // Serial.println(targetAngle);
 }
 
 void loop() {
@@ -247,6 +245,8 @@ void loop() {
 
   /**/
   if (status) {
+    digitalWrite(LED_BUILTIN, LOW);
+
     int currentCmd = commandQueue.getHead();
     int currentParam = paramQueue.getHead();
 
@@ -274,23 +274,26 @@ void loop() {
     case FD:
       // move forward
       if (newCommand) {
-        speedL = targetSpeedL;
-        speedR = targetSpeedR;
-        updateSpeed();
-        startEncoderValue = encoderValueL;
-        startEncoderValueL = encoderValueL;
-        startEncoderValueR = encoderValueR;
-        motorForward();
         newCommand = false;
         // startTime = millis();
+        /**/
+        motorL->setSpeed(linearSpeedLimit);
+        motorR->setSpeed(linearSpeedLimit + rightTrim);
+        motorL->run(FORWARD);
+        motorR->run(FORWARD);
+        /**/
       } else {
-        if (encoderValueL > (startEncoderValue - currentParam)) {
-          // courseCorrect();
-          delay(1);
+        if (encoderValueL - (encoderValueLAbs - currentParam) > encoderTolerance) {
+          // pidPositionMatchLeft(encoderValueLAbs - currentParam, linearSpeedLimit);
+          // pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
+          courseCorrect();
+          // Serial.println(encoderValueL);
         } else {
           motorStop();
           commandQueue.dequeue();
           paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
           newCommand = true;
           delay(movementDelay);
         }
@@ -298,75 +301,15 @@ void loop() {
       break;
     case BD:
       // move backward
-      if (newCommand) {
-        speedL = defaultSpeedL;
-        speedR = defaultSpeedR;
-
-        updateSpeed();
-        startEncoderValue = encoderValueL;
-        startEncoderValueL = encoderValueL;
-        startEncoderValueR = encoderValueR;
-        motorBackward();
-        newCommand = false;
-      } else {
-        if (encoderValueL > (startEncoderValue + currentParam)) {
-          // courseCorrectBackward();
-        } else {
-          motorStop();
-          commandQueue.dequeue();
-          paramQueue.dequeue();
-          newCommand = true;
-          delay(movementDelay);
-        }
-      }
+      
       break;
     case FDT:
-      // move forward
-      if (newCommand) {
-        speedL = defaultSpeedL;
-        speedR = defaultSpeedR;
-        updateSpeed();
-        startEncoderValueL = encoderValueL;
-        startEncoderValueR = encoderValueR;
-        motorForward();
-        newCommand = false;
-      } else {
-        // for now just use one sensor
-        float distance = getDistance();
-        if (distance - currentParam > distanceTolerance) {
-          // courseCorrect();
-          Serial.println(distance);
-        } else {
-          Serial.println(distance);
-          motorStop();
-          commandQueue.dequeue();
-          paramQueue.dequeue();
-          newCommand = true;
-          delay(movementDelay);
-        }
-      }
+      // move forward til distance from wall
+      
       break;
     case BDT:
-      // move backward
-      if (newCommand) {
-        speedL = defaultSpeedL;
-        speedR = defaultSpeedR;
-        updateSpeed();
-        startEncoderValueL = encoderValueL;
-        startEncoderValueR = encoderValueR;
-        motorBackward();
-        newCommand = false;
-      } else {
-        if (getDistance() - currentParam < -distanceTolerance) {
-          // courseCorrectBackward();
-        } else {
-          motorStop();
-          commandQueue.dequeue();
-          paramQueue.dequeue();
-          newCommand = true;
-          delay(movementDelay);
-        }
-      }
+      // move backward til distance from wall
+      
       break;
       /**/
       case RT:
@@ -376,8 +319,8 @@ void loop() {
           targetAngle -= 90;
           // Serial.println(targetAngle);
           /**/
-          if (targetAngle == -270) {
-            targetAngle = 90;
+          if (targetAngle == -180) {
+            targetAngle = 180;
           }
           /**/
           motorL->setSpeed(turnSpeedLimit);
@@ -385,7 +328,7 @@ void loop() {
           newCommand = false;
           // Serial.println(targetAngle);
         } else {
-          if ((targetAngle == 90 && orientation < 0) || (targetAngle != -180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == -180 && orientation < 0)) {
+          if ((targetAngle == 90 && orientation < 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation < 0)) {
             pidPositionMatchRight(encoderValueRAbs - fabs(encoderValueL - encoderValueLAbs));
             /*
             Serial.print(targetAngle);
@@ -400,11 +343,6 @@ void loop() {
             paramQueue.dequeue();
             encoderValueLAbs = encoderValueL;
             encoderValueRAbs = encoderValueR;
-            /*
-            if (targetAngle == -179) {
-              targetAngle = -180;
-            }
-            /**/
             newCommand = true;
             delay(movementDelay);
           }
@@ -453,7 +391,7 @@ void loop() {
         newCommand = false;
       } else {
         if (fabs(encoderValueL - (encoderValueLAbs - currentParam)) > encoderTolerance || fabs(encoderValueR - (encoderValueRAbs - currentParam)) > encoderTolerance) {
-          pidPositionMatchLeft(encoderValueLAbs - currentParam);
+          pidPositionMatchLeft(encoderValueLAbs - currentParam, turnSpeedLimit);
           pidPositionMatchRight(encoderValueRAbs - fabs(encoderValueL - encoderValueLAbs));
         }
         else {
@@ -474,7 +412,7 @@ void loop() {
         newCommand = false;
       } else {
         if (fabs(encoderValueL - (encoderValueLAbs + currentParam)) > encoderTolerance || fabs(encoderValueR - (encoderValueRAbs + currentParam)) > encoderTolerance) {
-          pidPositionMatchLeft(encoderValueLAbs + currentParam);
+          pidPositionMatchLeft(encoderValueLAbs + currentParam, turnSpeedLimit);
           pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
         }
         else {
@@ -534,7 +472,8 @@ void updateIMU() {
       double t4 = +1.0 - 2.0 * (q2sqr + q3 * q3);
       double yaw = atan2(t3, t4) * 180.0 / PI;
 
-      orientation = (int) yaw;
+      float temp = (int) (yaw * 100 + .5);
+      orientation = (float) temp / 100;
     }
   }
 }
@@ -558,12 +497,12 @@ float pidPositionMatchCalculateLeft(int target, float kp, float kd, float ki) {
   return u;
 }
 
-void pidPositionMatchLeft(int target) {
+void pidPositionMatchLeft(int target, int targetSpeed) {
   float u = pidPositionMatchCalculateLeft(target, kpL, kdL, kiL);
   float speed = fabs(u);
 
-  if (speed > turnSpeedLimit) {
-    speed = turnSpeedLimit;
+  if (speed > targetSpeed) {
+    speed = targetSpeed;
   }
   else if (speed < 20) {
     speed = 20;
@@ -619,52 +558,43 @@ void pidPositionMatchRight(int target) {
   }
 }
 
-//--------------------------------
-// courseCorrect stuff:
-// left encoder decr with forward, incr backwards
-// right encoder incr with forward, decr backwards
-//--------------------------------
-
-// course correct forward
-// currently for encoders, compare encoders see if match
-/*
 void courseCorrect() {
-  // drifting right
-  if (startEncoderValueL - encoderValueL > encoderValueR - startEncoderValueR) {
-    // speed up right motor
-    speedR = defaultSpeed + ((startEncoderValueL - encoderValueL) -
-                             (encoderValueR - startEncoderValueR)) /
-                                100;
-    updateSpeed();
+  int speed;
+  int difference = round(kpLinear * (fabs((float) targetAngle) - fabs(orientation)));
+  
+  if (targetAngle == 180) {
+    if (orientation > 0) {
+      speed = linearSpeedLimit + difference;
+    }
+    else {
+      speed = linearSpeedLimit - difference;
+    }
+  } else if (targetAngle == 0) {
+    if (orientation > targetAngle) {
+      speed = linearSpeedLimit + difference;
+    } else {
+      speed = linearSpeedLimit - difference;
+    }
+  } else if (targetAngle == -90) {
+    speed = linearSpeedLimit - difference;
+  } else {
+    speed = linearSpeedLimit + difference;
   }
-  // drifting left
-  else if (startEncoderValueL - encoderValueL <
-           encoderValueR - startEncoderValueR) {
-    // slow down right motor
-    speedR = defaultSpeed - ((encoderValueR - startEncoderValueR) -
-                             (startEncoderValueL - encoderValueL)) /
-                                100;
-    updateSpeed();
-  }
-}
 
-void courseCorrectBackward() {
-  // drifting right
-  if (encoderValueL - startEncoderValueL > startEncoderValueR - encoderValueR) {
-    // increase right speed
-    speedR = defaultSpeed + (encoderValueL - startEncoderValueL) -
-             (startEncoderValueR - encoderValueR);
-    updateSpeed();
+  if (speed > 255) {
+    speed = 255;
   }
-  // drifting left
-  if (encoderValueL - startEncoderValueL < startEncoderValueR - encoderValueR) {
-    // decrease right speed
-    speedR = defaultSpeed - ((encoderValueR - startEncoderValueR) -
-                             (startEncoderValueL - encoderValueL));
-    updateSpeed();
-  }
+
+  Serial.print(targetAngle);
+  Serial.print(", ");
+  Serial.print(orientation);
+  Serial.print(", ");
+  Serial.print(difference);
+  Serial.print(", ");
+  Serial.println(speed);
+
+  motorR->setSpeed(speed);
 }
-/**/
 
 void updateEncoderL() {
   int MSB = digitalRead(encoderLPinA); // MSB = most significant bit
@@ -696,35 +626,6 @@ void updateEncoderR() {
     encoderValueR++;
 
   lastEncodedR = encoded; // store this value for next time
-}
-
-void updateSpeed() {
-  motorL->setSpeed(speedL);
-  motorR->setSpeed(speedR);
-}
-
-void motorForward() {
-  motorL->run(FORWARD);
-  motorR->run(FORWARD);
-}
-
-void motorBackward() {
-  motorL->run(BACKWARD);
-  motorR->run(BACKWARD);
-}
-
-void motorRight() {
-  motorL->run(FORWARD);
-  motorR->run(BACKWARD);
-  motorLStopped = false;
-  motorRStopped = false;
-}
-
-void motorLeft() {
-  motorL->run(BACKWARD);
-  motorR->run(FORWARD);
-  motorLStopped = false;
-  motorRStopped = false;
 }
 
 void motorStop() {
