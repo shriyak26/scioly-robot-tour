@@ -33,10 +33,10 @@ int linearSpeedLimit = 200;
 int rightTrim = 5;
 
 // Pins
-#define sensorRTrigPin 2
-#define sensorREchoPin 3
-#define sensorLTrigPin 4
-#define sensorLEchoPin 5
+#define sensorLTrigPin 2
+#define sensorLEchoPin 3
+#define sensorRTrigPin 4
+#define sensorREchoPin 5
 #define encoderLPinA 6
 #define encoderLPinB 7
 #define encoderRPinA 8
@@ -61,6 +61,7 @@ Adafruit_DCMotor *motorR = motorShield.getMotor(2);
 #define BD 11    // move backward
 #define FDT 12   // move forward until distance
 #define BDT 13   // move backward until distance
+#define DM 15    // distance match
 #define RT 20    // turn right
 #define LT 21    // turn left
 #define RTE 35   // turn right but with encoders
@@ -73,9 +74,11 @@ int targetAngle = 0;
 float orientation = 0.0;
 int defaultSpeedL = 155, defaultSpeedR = 150;
 int turnSpeedLimit = 100;
+
 int distanceTolerance = 1;
 int encoderTolerance = 1;
 int directionTolerance = 1;
+
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
 long encoderValueLAbs = 0, encoderValueRAbs = 0;
@@ -86,6 +89,7 @@ int targetSpeedL = defaultSpeedL;
 int targetSpeedR = defaultSpeedR;
 int startSpeedL = 80;
 int startSpeedR = 80;
+float disL = 0, disR = 0;
 
 // for PID control
 long previousTimeL = 0;
@@ -95,6 +99,14 @@ float eIntegralL = 0;
 long previousTimeR = 0;
 float ePreviousR = 0;
 float eIntegralR = 0;
+
+long previousTimeL2 = 0;
+float ePreviousL2 = 0;
+float eIntegralL2 = 0;
+
+long previousTimeR2 = 0;
+float ePreviousR2 = 0;
+float eIntegralR2 = 0;
 
 // PID gains
 float kpL = 2.0;
@@ -106,6 +118,14 @@ float kdR = 0.05;
 float kiR = 0.01;
 
 float kpLinear = 4.0;
+
+float kpL2 = 5.0;
+float kdL2 = 0.05;
+float kiL2 = 0.0;
+
+float kpR2 = 5.0;
+float kdR2 = 0.05;
+float kiR2 = 0.0;
 
 // timing test
 int startTime;
@@ -176,6 +196,12 @@ void setup() {
     }
   }
 
+  // initialize distance sensors
+  pinMode(sensorLTrigPin, OUTPUT);
+  pinMode(sensorLEchoPin, INPUT);
+  pinMode(sensorRTrigPin, OUTPUT);
+  pinMode(sensorREchoPin, INPUT);
+
   // initialize start button
   pinMode(buttonPin, INPUT_PULLUP);
 
@@ -196,7 +222,7 @@ void setup() {
 
   // add(FD, 50000);
 
-  /**/
+  /*
   add(FD, DIS1);
   add(RT);
   add(FD, DIS1);
@@ -221,7 +247,7 @@ void setup() {
   add(LT);
   /**/
 
-  // add(FDT,TIL1);
+  add(FDT,TIL1);
   /*
   /**/
 
@@ -304,8 +330,50 @@ void loop() {
       
       break;
     case FDT:
+        if (newCommand) {
+          newCommand = false;
+          motorR->setSpeed(linearSpeedLimit + rightTrim);
+          motorR->run(FORWARD);
+        } else {
+          getDistance();
+          if (fabs(disL - currentParam) > distanceTolerance) {
+            pidDistanceMatchLeft(currentParam, linearSpeedLimit);
+            courseCorrect();
+          } else {
+            motorStop();
+            commandQueue.dequeue();
+            paramQueue.dequeue();
+            encoderValueLAbs = encoderValueL;
+            encoderValueRAbs = encoderValueR;
+            newCommand = true;
+            delay(movementDelay);
+          }
+        }
+      break;
+    case DM:
       // move forward til distance from wall
-      
+      if (newCommand) {
+        newCommand = false;
+      } else {
+        checkDistance();
+        if (fabs(disL - currentParam) > distanceTolerance || fabs(disR - currentParam) > distanceTolerance) {
+          pidDistanceMatchLeft(currentParam, linearSpeedLimit);
+          pidDistanceMatchRight(disL);
+          /*
+          Serial.print(disL);
+          Serial.print(", ");
+          Serial.println(disR);
+          /**/
+        } else {
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
+        }
+      }
       break;
     case BDT:
       // move backward til distance from wall
@@ -448,6 +516,25 @@ void checkButton() {
   }
 }
 
+void checkDistance()
+{
+  digitalWrite(sensorLTrigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(sensorLTrigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(sensorLTrigPin, LOW);
+  float duration = pulseIn(sensorLEchoPin, HIGH);
+  disL = duration * 0.343 / 2;
+  delay(60);
+  digitalWrite(sensorRTrigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(sensorRTrigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(sensorRTrigPin, LOW);
+  duration = pulseIn(sensorREchoPin, HIGH);
+  disR = duration * 0.343 / 2;
+}
+
 void updateIMU() {
   // Read any DMP data waiting in the FIFO
   icm_20948_DMP_data_t data;
@@ -558,6 +645,89 @@ void pidPositionMatchRight(int target) {
   }
 }
 
+float pidDistanceMatchCalculateLeft(int target, float kp, float kd, float ki) {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeL2)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = disL - target;
+  float eDerivative = (e - ePreviousL2) / deltaT;
+  eIntegralL2 = eIntegralL2 + e * deltaT;
+
+  // compute PID control signal
+  float u = (kp * e) + (kd * eDerivative) + (ki * eIntegralL2);
+
+  previousTimeL2 = currentTime;
+  ePreviousL2 = e;
+
+  return u;
+}
+
+void pidDistanceMatchLeft(int target, int targetSpeed) {
+  float u = pidDistanceMatchCalculateLeft(target, kpL2, kdL2, kiL2);
+  float speed = fabs(u);
+
+  if (speed > targetSpeed) {
+    speed = targetSpeed;
+  }
+  else if (speed < 20) {
+    speed = 20;
+  }
+
+  motorL->setSpeed(speed);
+
+  if (u < 0) {
+    motorL->run(BACKWARD);
+  }
+  else {
+    motorL->run(FORWARD);
+  }
+}
+
+float pidDistanceMatchCalculateRight(int target, float kp, float kd, float ki) {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeR2)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = disR - target;
+  float eDerivative = (e - ePreviousR2) / deltaT;
+  // Serial.println(e);
+  eIntegralR2 = eIntegralR2 + e * deltaT;
+  
+
+  // compute PID control signal
+  float u = (kp * e) + (kd * eDerivative) + (ki * eIntegralR2);
+
+  previousTimeR2 = currentTime;
+  ePreviousR2 = e;
+  
+  // Serial.println(ePreviousR2);
+  return u;
+}
+
+void pidDistanceMatchRight(int target) {
+  float u = pidDistanceMatchCalculateRight(target, kpR2, kdR2, kiR2);
+  float speed = fabs(u);
+
+  if (speed > 255) {
+    speed = 255;
+  }
+  else if (speed < 20) {
+    speed = 20;
+  }
+
+  motorR->setSpeed(speed);
+
+  if (u < 0) {
+    motorR->run(BACKWARD);
+  }
+  else {
+    motorR->run(FORWARD);
+  }
+}
+
 void courseCorrect() {
   int speed;
   int difference = round(kpLinear * (fabs((float) targetAngle) - fabs(orientation)));
@@ -585,6 +755,7 @@ void courseCorrect() {
     speed = 255;
   }
 
+  /*
   Serial.print(targetAngle);
   Serial.print(", ");
   Serial.print(orientation);
@@ -592,6 +763,7 @@ void courseCorrect() {
   Serial.print(difference);
   Serial.print(", ");
   Serial.println(speed);
+  /**/
 
   motorR->setSpeed(speed);
 }
@@ -633,15 +805,12 @@ void motorStop() {
   motorR->setSpeed(0);
 }
 
-void motorStopL() { motorL->setSpeed(0); }
-void motorStopR() { motorR->setSpeed(0); }
-
 /**
  * Calculates distance to object in front using TWO front ultrasonic sensor
  * currently only using left sensor lol
  * @return distance in mm
  */
-float getDistance() {
+void getDistance() {
   digitalWrite(sensorLTrigPin, LOW);
   delayMicroseconds(2);
 
@@ -653,7 +822,7 @@ float getDistance() {
   float distance = duration * 0.343 / 2;
   // 0.343: speed of sound in mm/microsecond
   // 2: round trip of sound
-  return distance;
+  disL = distance;
 }
 
 /*
