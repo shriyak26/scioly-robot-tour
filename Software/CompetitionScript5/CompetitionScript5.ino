@@ -31,6 +31,7 @@ int linearSpeedLimit = 200;
 
 // temporary fix
 int rightTrim = 5;
+float rightTrim2 = 2.0;
 
 // Pins
 #define sensorLTrigPin 2
@@ -78,6 +79,7 @@ int turnSpeedLimit = 100;
 int distanceTolerance = 1;
 int encoderTolerance = 1;
 int directionTolerance = 1;
+float matchTolerance = 1.5;
 
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
@@ -108,6 +110,10 @@ long previousTimeR2 = 0;
 float ePreviousR2 = 0;
 float eIntegralR2 = 0;
 
+long previousTimeC = 0;
+float ePreviousC = 0;
+float eIntegralC = 0;
+
 // PID gains
 float kpL = 2.0;
 float kdL = 0.05;
@@ -119,12 +125,16 @@ float kiR = 0.01;
 
 float kpLinear = 4.0;
 
-float kpL2 = 5.0;
-float kdL2 = 0.05;
+float kpC = 5.0;
+float kdC = 0.05;
+float kiC = 0.0;
+
+float kpL2 = 3.0;
+float kdL2 = 0.0;
 float kiL2 = 0.0;
 
-float kpR2 = 5.0;
-float kdR2 = 0.05;
+float kpR2 = 3.0;
+float kdR2 = 0.0;
 float kiR2 = 0.0;
 
 // timing test
@@ -220,7 +230,6 @@ void setup() {
   // must be first!
   add(START);
 
-  // add(FD, 50000);
 
   /*
   add(FD, DIS1);
@@ -247,7 +256,8 @@ void setup() {
   add(LT);
   /**/
 
-  add(FDT,TIL1);
+  //add(FDT,TIL1);
+  add(DM,TIL1);
   /*
   /**/
 
@@ -274,7 +284,7 @@ void loop() {
     digitalWrite(LED_BUILTIN, LOW);
 
     int currentCmd = commandQueue.getHead();
-    int currentParam = paramQueue.getHead();
+    float currentParam = paramQueue.getHead();
 
     // 
     updateIMU();
@@ -312,7 +322,7 @@ void loop() {
         if (encoderValueL - (encoderValueLAbs - currentParam) > encoderTolerance) {
           // pidPositionMatchLeft(encoderValueLAbs - currentParam, linearSpeedLimit);
           // pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
-          courseCorrect();
+          pidCourseCorrect();
           // Serial.println(encoderValueL);
         } else {
           motorStop();
@@ -332,13 +342,15 @@ void loop() {
     case FDT:
         if (newCommand) {
           newCommand = false;
+          motorL->setSpeed(linearSpeedLimit);
           motorR->setSpeed(linearSpeedLimit + rightTrim);
+          motorL->run(FORWARD);
           motorR->run(FORWARD);
         } else {
           getDistance();
-          if (fabs(disL - currentParam) > distanceTolerance) {
-            pidDistanceMatchLeft(currentParam, linearSpeedLimit);
-            courseCorrect();
+          if (disL - currentParam > distanceTolerance) {
+            // pidDistanceMatchLeft(currentParam, linearSpeedLimit);
+            pidCourseCorrect();
           } else {
             motorStop();
             commandQueue.dequeue();
@@ -354,12 +366,14 @@ void loop() {
       // move forward til distance from wall
       if (newCommand) {
         newCommand = false;
+        // motorR->setSpeed(linearSpeedLimit + rightTrim);
+        // motorR->run(FORWARD);
       } else {
         checkDistance();
-        if (fabs(disL - currentParam) > distanceTolerance || fabs(disR - currentParam) > distanceTolerance) {
-          pidDistanceMatchLeft(currentParam, linearSpeedLimit);
-          pidDistanceMatchRight(disL);
-          /*
+        if (fabs(disL - currentParam) > matchTolerance || fabs(disR - currentParam) > matchTolerance) {
+          pidDistanceMatchLeft(currentParam, 255);
+          pidDistanceMatchRight(currentParam);
+          /**/
           Serial.print(disL);
           Serial.print(", ");
           Serial.println(disR);
@@ -524,7 +538,7 @@ void checkDistance()
   delayMicroseconds(10);
   digitalWrite(sensorLTrigPin, LOW);
   float duration = pulseIn(sensorLEchoPin, HIGH);
-  disL = duration * 0.343 / 2;
+  disL = duration * 0.343 / 2.0;
   delay(60);
   digitalWrite(sensorRTrigPin, LOW);
   delayMicroseconds(2);
@@ -532,7 +546,7 @@ void checkDistance()
   delayMicroseconds(10);
   digitalWrite(sensorRTrigPin, LOW);
   duration = pulseIn(sensorREchoPin, HIGH);
-  disR = duration * 0.343 / 2;
+  disR = duration * 0.343 / 2.0 + rightTrim2;
 }
 
 void updateIMU() {
@@ -671,8 +685,8 @@ void pidDistanceMatchLeft(int target, int targetSpeed) {
   if (speed > targetSpeed) {
     speed = targetSpeed;
   }
-  else if (speed < 20) {
-    speed = 20;
+  else if (speed < 15) {
+    speed = 15;
   }
 
   motorL->setSpeed(speed);
@@ -695,7 +709,6 @@ float pidDistanceMatchCalculateRight(int target, float kp, float kd, float ki) {
   float eDerivative = (e - ePreviousR2) / deltaT;
   // Serial.println(e);
   eIntegralR2 = eIntegralR2 + e * deltaT;
-  
 
   // compute PID control signal
   float u = (kp * e) + (kd * eDerivative) + (ki * eIntegralR2);
@@ -714,16 +727,49 @@ void pidDistanceMatchRight(int target) {
   if (speed > 255) {
     speed = 255;
   }
-  else if (speed < 20) {
-    speed = 20;
+  else if (speed < 15) {
+    speed = 15;
   }
 
   motorR->setSpeed(speed);
 
   if (u < 0) {
+    // temp fix
     motorR->run(BACKWARD);
   }
   else {
+    motorR->run(FORWARD);
+  }
+}
+
+void pidCourseCorrect() {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeC)) / 1.0e6;
+
+  // compute error, derivative, integral
+  float e = targetAngle - orientation;
+  float eDerivative = (e - ePreviousC) / deltaT;
+  // Serial.println(e);
+  eIntegralC = eIntegralC + e * deltaT;
+  
+  // compute PID control signal
+  float u = (kpC * e) + (kdC * eDerivative) + (kiC * eIntegralC);
+
+  previousTimeC = currentTime;
+  ePreviousC = e;
+
+  float speed = u + linearSpeedLimit;
+  
+  if (speed > 255) {
+    speed = 255;
+    motorR->setSpeed(speed);
+    motorR->run(FORWARD);
+  } else if (speed < 0) {
+    motorR->setSpeed(fabs(speed));
+    motorR->run(BACKWARD);
+  } else {
+    motorR->setSpeed(speed);
     motorR->run(FORWARD);
   }
 }
