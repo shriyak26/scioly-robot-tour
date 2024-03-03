@@ -73,6 +73,7 @@ Adafruit_DCMotor *motorR = motorShield.getMotor(2);
 bool status, newCommand;
 int targetAngle = 0;
 float orientation = 0.0;
+float orientCalibrate = 0.0;
 int defaultSpeedL = 155, defaultSpeedR = 150;
 int turnSpeedLimit = 100;
 
@@ -136,6 +137,8 @@ float kiL2 = 0.0;
 float kpR2 = 3.0;
 float kdR2 = 0.0;
 float kiR2 = 0.0;
+
+float calibrateTesting = 0.0;
 
 // timing test
 int startTime;
@@ -241,7 +244,7 @@ void setup() {
   add(FD, DIS1);
   add(RT);
   /**/
-  /*
+  /**/
   add(LT);
   add(LT);
   add(LT);
@@ -257,9 +260,7 @@ void setup() {
   /**/
 
   //add(FDT,TIL1);
-  add(DM,TIL1);
-  /*
-  /**/
+  // add(DM,TIL1);
 
   // must be last!
   add(STOP);
@@ -278,6 +279,11 @@ void setup() {
 
 void loop() {
   checkButton();
+  /*
+  Serial.print(orientation);
+  Serial.print(", ");
+  Serial.println(calibrateTesting);
+  /**/
 
   /**/
   if (status) {
@@ -373,7 +379,7 @@ void loop() {
         if (fabs(disL - currentParam) > matchTolerance || fabs(disR - currentParam) > matchTolerance) {
           pidDistanceMatchLeft(currentParam, 255);
           pidDistanceMatchRight(currentParam);
-          /**/
+          /*
           Serial.print(disL);
           Serial.print(", ");
           Serial.println(disR);
@@ -382,6 +388,9 @@ void loop() {
           motorStop();
           commandQueue.dequeue();
           paramQueue.dequeue();
+          updateIMU();
+          orientCalibrate += targetAngle - orientation;
+          calibrateTesting = orientation;
           encoderValueLAbs = encoderValueL;
           encoderValueRAbs = encoderValueR;
           newCommand = true;
@@ -394,79 +403,79 @@ void loop() {
       
       break;
       /**/
-      case RT:
-        // turn right
-        if (newCommand) {
-          // Serial.println(targetAngle);
-          targetAngle -= 90;
-          // Serial.println(targetAngle);
-          /**/
-          if (targetAngle == -180) {
-            targetAngle = 180;
-          }
-          /**/
-          motorL->setSpeed(turnSpeedLimit);
-          motorL->run(FORWARD);
-          newCommand = false;
-          // Serial.println(targetAngle);
-        } else {
-          if ((targetAngle == 90 && orientation < 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation < 0)) {
-            pidPositionMatchRight(encoderValueRAbs - fabs(encoderValueL - encoderValueLAbs));
-            /*
-            Serial.print(targetAngle);
-            Serial.print(", ");
-            Serial.print(orientation - targetAngle);
-            Serial.print(", ");
-            Serial.println(orientation);
-            /**/
-          } else {
-            motorStop();
-            commandQueue.dequeue();
-            paramQueue.dequeue();
-            encoderValueLAbs = encoderValueL;
-            encoderValueRAbs = encoderValueR;
-            newCommand = true;
-            delay(movementDelay);
-          }
+    case RT:
+      // turn right
+      if (newCommand) {
+        // Serial.println(targetAngle);
+        targetAngle -= 90;
+        // Serial.println(targetAngle);
+        /**/
+        if (targetAngle == -180) {
+          targetAngle = 180;
         }
-        break;
-      case LT:
-        // turn left
-        if (newCommand) {
-          // Serial.println(targetAngle);
-          targetAngle += 90;
-          // Serial.println(targetAngle);
+        /**/
+        motorL->setSpeed(turnSpeedLimit);
+        motorL->run(FORWARD);
+        newCommand = false;
+        // Serial.println(targetAngle);
+      } else {
+        if ((targetAngle == 90 && orientation < 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation < 0)) {
+          pidPositionMatchRight(encoderValueRAbs - fabs(encoderValueL - encoderValueLAbs));
+          /*
+          Serial.print(targetAngle);
+          Serial.print(", ");
+          Serial.print(orientation - targetAngle);
+          Serial.print(", ");
+          Serial.println(orientation);
           /**/
-          if (targetAngle == 270) {
-            targetAngle = -90;
-          }
-          /**/
-          motorL->setSpeed(turnSpeedLimit);
-          motorL->run(BACKWARD);
-          newCommand = false;
-          // Serial.println(targetAngle);
         } else {
-          if ((targetAngle == -90 && orientation > 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation > 0)) {
-            pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
-            /*
-            Serial.print(targetAngle);
-            Serial.print(", ");
-            Serial.print(orientation - targetAngle);
-            Serial.print(", ");
-            Serial.println(orientation);
-            /**/
-          } else {
-            motorStop();
-            commandQueue.dequeue();
-            paramQueue.dequeue();
-            encoderValueLAbs = encoderValueL;
-            encoderValueRAbs = encoderValueR;
-            newCommand = true;
-            delay(movementDelay);
-          }
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
         }
-        break;
-      /**/
+      }
+      break;
+    case LT:
+      // turn left
+      if (newCommand) {
+        // Serial.println(targetAngle);
+        targetAngle += 90;
+        // Serial.println(targetAngle);
+        /**/
+        if (targetAngle == 270) {
+          targetAngle = -90;
+        }
+        /**/
+        motorL->setSpeed(turnSpeedLimit);
+        motorL->run(BACKWARD);
+        newCommand = false;
+        // Serial.println(targetAngle);
+      } else {
+        if ((targetAngle == -90 && orientation > 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation > 0)) {
+          pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
+          /*
+          Serial.print(targetAngle);
+          Serial.print(", ");
+          Serial.print(orientation - targetAngle);
+          Serial.print(", ");
+          Serial.println(orientation);
+          /**/
+        } else {
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
+        }
+      }
+      break;
+    /**/
     case RTE:
       // turn right with encoders
       if (newCommand) {
@@ -574,7 +583,14 @@ void updateIMU() {
       double yaw = atan2(t3, t4) * 180.0 / PI;
 
       float temp = (int) (yaw * 100 + .5);
+
       orientation = (float) temp / 100;
+      orientation += orientCalibrate;
+      if (orientation > 180) {
+        orientation-= 360;
+      } else if (orientation < -180) {
+        orientation+= 360;
+      }
     }
   }
 }
