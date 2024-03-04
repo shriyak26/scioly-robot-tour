@@ -74,7 +74,7 @@ bool status, newCommand;
 int targetAngle = 0;
 float orientation = 0.0;
 float orientCalibrate = 0.0;
-int defaultSpeedL = 155, defaultSpeedR = 150;
+int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
 int turnSpeedLimit = 100;
 
 int distanceTolerance = 1;
@@ -85,13 +85,13 @@ float matchTolerance = 1.5;
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
 long encoderValueLAbs = 0, encoderValueRAbs = 0;
-bool accelerate;
-bool deccelerate;
-int accelerateRate = 1;
+//bool accelerate;
+//bool deccelerate;
+//int accelerateRate = 1;
 int targetSpeedL = defaultSpeedL;
 int targetSpeedR = defaultSpeedR;
-int startSpeedL = 80;
-int startSpeedR = 80;
+//int startSpeedL = 80;
+//int startSpeedR = 80;
 float disL = 0, disR = 0;
 
 // for PID control
