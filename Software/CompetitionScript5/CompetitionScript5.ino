@@ -2,6 +2,7 @@
   Pre-Run Checklist
   1. New batteries
   2. Cables
+  3. Hard reset
   
   Timing Reference Sheet
   Straight:
@@ -20,18 +21,20 @@
 
 int targetTime = 50; // in seconds
 int DIS1 = 22000;     // 3700
-int DIS2 = 7400;
-int TIL1 = 120;
+int DIS2 = DIS1*2;
+int TIL1 = 195;
+int TIL2 = 695;
+int TILF = 260;
 int TURN90 = 4650;
 int turnTime = 4800; // do not change unless u need to ig
 int startDelay = 2000;
 int movementDelay = 250;
 
+int speedControl = 200;
 int linearSpeedLimit = 200;
 
 // temporary fix
 int rightTrim = 5;
-float rightTrim2 = 2.0;
 
 // Pins
 #define sensorLTrigPin 2
@@ -74,13 +77,18 @@ bool status, newCommand;
 int targetAngle = 0;
 float orientation = 0.0;
 float orientCalibrate = 0.0;
-int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
+// int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
 int turnSpeedLimit = 100;
+int linearSlowLimit = 80;
+bool slowed = false;
 
 int distanceTolerance = 1;
 int encoderTolerance = 1;
 int directionTolerance = 1;
 float matchTolerance = 1.5;
+
+int slowEnc = 3000;
+int slowDis = 50;
 
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
@@ -88,8 +96,8 @@ long encoderValueLAbs = 0, encoderValueRAbs = 0;
 //bool accelerate;
 //bool deccelerate;
 //int accelerateRate = 1;
-int targetSpeedL = defaultSpeedL;
-int targetSpeedR = defaultSpeedR;
+//int targetSpeedL = defaultSpeedL;
+//int targetSpeedR = defaultSpeedR;
 //int startSpeedL = 80;
 //int startSpeedR = 80;
 float disL = 0, disR = 0;
@@ -98,6 +106,10 @@ float disL = 0, disR = 0;
 long previousTimeL = 0;
 float ePreviousL = 0;
 float eIntegralL = 0;
+
+long previousTimeO = 0;
+float ePreviousO = 0;
+float eIntegralO = 0;
 
 long previousTimeR = 0;
 float ePreviousR = 0;
@@ -120,14 +132,18 @@ float kpL = 2.0;
 float kdL = 0.05;
 float kiL = 0.0;
 
+float kpO = 1.0;
+float kdO = 0.0;
+float kiO = 0.0;
+
 float kpR = 5.0;
 float kdR = 0.05;
 float kiR = 0.01;
 
 float kpLinear = 4.0;
 
-float kpC = 5.0;
-float kdC = 0.05;
+float kpC = 8.0;
+float kdC = 0.1;
 float kiC = 0.0;
 
 float kpL2 = 3.0;
@@ -244,7 +260,7 @@ void setup() {
   add(FD, DIS1);
   add(RT);
   /**/
-  /**/
+  /*
   add(LT);
   add(LT);
   add(LT);
@@ -259,7 +275,9 @@ void setup() {
   add(LT);
   /**/
 
-  //add(FDT,TIL1);
+  // add(FD,DIS1);
+  add(FDT,TIL1);
+  add(BDT,TIL2);
   // add(DM,TIL1);
 
   // must be last!
@@ -279,6 +297,7 @@ void setup() {
 
 void loop() {
   checkButton();
+  updateIMU();
   /*
   Serial.print(orientation);
   Serial.print(", ");
@@ -291,9 +310,6 @@ void loop() {
 
     int currentCmd = commandQueue.getHead();
     float currentParam = paramQueue.getHead();
-
-    // 
-    updateIMU();
 
     switch (currentCmd) {
     case WAIT:
@@ -317,19 +333,21 @@ void loop() {
       // move forward
       if (newCommand) {
         newCommand = false;
-        // startTime = millis();
-        /**/
+        linearSpeedLimit = speedControl;
         motorL->setSpeed(linearSpeedLimit);
         motorR->setSpeed(linearSpeedLimit + rightTrim);
         motorL->run(FORWARD);
         motorR->run(FORWARD);
-        /**/
       } else {
         if (encoderValueL - (encoderValueLAbs - currentParam) > encoderTolerance) {
           // pidPositionMatchLeft(encoderValueLAbs - currentParam, linearSpeedLimit);
           // pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
           pidCourseCorrect();
           // Serial.println(encoderValueL);
+          if (encoderValueL - (encoderValueLAbs - currentParam) < slowEnc) {
+            linearSpeedLimit = linearSlowLimit;
+            motorL->setSpeed(linearSpeedLimit);
+          }
         } else {
           motorStop();
           commandQueue.dequeue();
@@ -346,32 +364,41 @@ void loop() {
       
       break;
     case FDT:
-        if (newCommand) {
-          newCommand = false;
-          motorL->setSpeed(linearSpeedLimit);
-          motorR->setSpeed(linearSpeedLimit + rightTrim);
-          motorL->run(FORWARD);
-          motorR->run(FORWARD);
-        } else {
-          getDistance();
-          if (disL - currentParam > distanceTolerance) {
-            // pidDistanceMatchLeft(currentParam, linearSpeedLimit);
-            pidCourseCorrect();
-          } else {
-            motorStop();
-            commandQueue.dequeue();
-            paramQueue.dequeue();
-            encoderValueLAbs = encoderValueL;
-            encoderValueRAbs = encoderValueR;
-            newCommand = true;
-            delay(movementDelay);
+      if (newCommand) {
+        newCommand = false;
+        linearSpeedLimit = speedControl;
+        motorL->setSpeed(linearSpeedLimit);
+        motorR->setSpeed(linearSpeedLimit + rightTrim * 2);
+        motorL->run(FORWARD);
+        motorR->run(FORWARD);
+      } else {
+        getDistance();
+        if (disL - currentParam > distanceTolerance) {
+          // pidDistanceMatchLeft(currentParam, linearSpeedLimit);
+          if (disL - currentParam < slowDis) {
+            Serial.println("hi1");
+            linearSpeedLimit = linearSlowLimit;
+            Serial.println("hi2");
+            motorL->setSpeed(linearSpeedLimit);
+            Serial.println("hi3");
           }
+          pidCourseCorrect();
+        } else {
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
         }
+      }
       break;
     case DM:
       // move forward til distance from wall
       if (newCommand) {
         newCommand = false;
+        linearSpeedLimit = speedControl;
         // motorR->setSpeed(linearSpeedLimit + rightTrim);
         // motorR->run(FORWARD);
       } else {
@@ -400,7 +427,32 @@ void loop() {
       break;
     case BDT:
       // move backward til distance from wall
-      
+      if (newCommand) {
+          newCommand = false;
+          linearSpeedLimit = speedControl;
+          motorL->setSpeed(linearSpeedLimit);
+          motorR->setSpeed(linearSpeedLimit + rightTrim);
+          motorL->run(BACKWARD);
+          motorR->run(BACKWARD);
+        } else {
+          getDistance();
+          if (currentParam - disL > distanceTolerance) {
+            // pidDistanceMatchLeft(currentParam, linearSpeedLimit);
+            pidCourseCorrectBackward();
+            if (currentParam - disL < slowDis) {
+              linearSpeedLimit = linearSlowLimit;
+              motorL->setSpeed(linearSpeedLimit);
+            }
+          } else {
+            motorStop();
+            commandQueue.dequeue();
+            paramQueue.dequeue();
+            encoderValueLAbs = encoderValueL;
+            encoderValueRAbs = encoderValueR;
+            newCommand = true;
+            delay(movementDelay);
+          }
+        }
       break;
       /**/
     case RT:
@@ -475,7 +527,7 @@ void loop() {
         }
       }
       break;
-    /**/
+    /*
     case RTE:
       // turn right with encoders
       if (newCommand) {
@@ -518,12 +570,13 @@ void loop() {
         }
       }
       break;
+      /**/
     case STOP:
       // stop
       motorStop();
       break;
     }
-  } /**/
+  }
 }
 
 void add(int cmd) { add(cmd, 0); }
@@ -555,7 +608,7 @@ void checkDistance()
   delayMicroseconds(10);
   digitalWrite(sensorRTrigPin, LOW);
   duration = pulseIn(sensorREchoPin, HIGH);
-  disR = duration * 0.343 / 2.0 + rightTrim2;
+  disR = duration * 0.343 / 2.0;
 }
 
 void updateIMU() {
@@ -585,12 +638,14 @@ void updateIMU() {
       float temp = (int) (yaw * 100 + .5);
 
       orientation = (float) temp / 100;
+      /*
       orientation += orientCalibrate;
       if (orientation > 180) {
         orientation-= 360;
       } else if (orientation < -180) {
         orientation+= 360;
       }
+      /**/
     }
   }
 }
@@ -775,13 +830,16 @@ void pidCourseCorrect() {
   previousTimeC = currentTime;
   ePreviousC = e;
 
-  float speed = u + linearSpeedLimit;
+  int speed = u + linearSpeedLimit;
   
   if (speed > 255) {
     speed = 255;
     motorR->setSpeed(speed);
     motorR->run(FORWARD);
   } else if (speed < 0) {
+    if (speed < -255) {
+      speed = -255;
+    }
     motorR->setSpeed(fabs(speed));
     motorR->run(BACKWARD);
   } else {
@@ -790,6 +848,42 @@ void pidCourseCorrect() {
   }
 }
 
+void pidCourseCorrectBackward() {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeC)) / 1.0e6;
+
+  // compute error, derivative, integral
+  float e = orientation - targetAngle;
+  float eDerivative = (e - ePreviousC) / deltaT;
+  // Serial.println(e);
+  eIntegralC = eIntegralC + e * deltaT;
+  
+  // compute PID control signal
+  float u = (kpC * e) + (kdC * eDerivative) + (kiC * eIntegralC);
+
+  previousTimeC = currentTime;
+  ePreviousC = e;
+
+  int speed = u + linearSpeedLimit;
+  
+  if (speed > 255) {
+    speed = 255;
+    motorR->setSpeed(speed);
+    motorR->run(BACKWARD);
+  } else if (speed < 0) {
+    if (speed < -255) {
+      speed = -255;
+    }
+    motorR->setSpeed(fabs(speed));
+    motorR->run(FORWARD);
+  } else {
+    motorR->setSpeed(speed);
+    motorR->run(BACKWARD);
+  }
+}
+
+/*
 void courseCorrect() {
   int speed;
   int difference = round(kpLinear * (fabs((float) targetAngle) - fabs(orientation)));
@@ -817,18 +911,9 @@ void courseCorrect() {
     speed = 255;
   }
 
-  /*
-  Serial.print(targetAngle);
-  Serial.print(", ");
-  Serial.print(orientation);
-  Serial.print(", ");
-  Serial.print(difference);
-  Serial.print(", ");
-  Serial.println(speed);
-  /**/
-
   motorR->setSpeed(speed);
 }
+/**/
 
 void updateEncoderL() {
   int MSB = digitalRead(encoderLPinA); // MSB = most significant bit
@@ -873,9 +958,6 @@ void motorStop() {
  * @return distance in mm
  */
 void getDistance() {
-  digitalWrite(sensorLTrigPin, LOW);
-  delayMicroseconds(2);
-
   digitalWrite(sensorLTrigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(sensorLTrigPin, LOW);
@@ -908,58 +990,4 @@ void calculateSpeed() {
 
   // targetTime - turnTime * turnsNum - ...
 }
-*/
-
-// Motor testing
-/*
-  motorL->run(FORWARD);
-  motorR->run(FORWARD);
-  delay(5000);
-  motorL->setSpeed(0);
-  motorR->setSpeed(0);
-*/
-
-/*
-case FD:
-  // move forward
-  if (newCommand) {
-    speedL = startSpeedL;
-    speedR = startSpeedR;
-    accelerate = true;
-    updateSpeed();
-    startEncoderValue = encoderValueL;
-    startEncoderValueL = encoderValueL;
-    startEncoderValueR = encoderValueR;
-    motorForward();
-    newCommand = false;
-  } else {
-    if (encoderValueL > (startEncoderValue - currentParam)) {
-      // courseCorrect();
-      if (accelerate) {
-        speedL += accelerateRate;
-        speedR += accelerateRate;
-        updateSpeed();
-        if (speedL >= targetSpeedL) {
-          accelerate = false;
-        }
-      } else if (encoderValueL - encoderTolerance >= (startEncoderValue - currentParam)) {
-        deccelerate = true;
-      }
-      if (deccelerate) {
-        speedL -= accelerateRate;
-        speedR -= accelerateRate;
-        updateSpeed();
-        if (speedL <= startSpeedL) {
-          deccelerate = false;
-        }
-      }
-    } else {
-      motorStop();
-      commandQueue.dequeue();
-      paramQueue.dequeue();
-      newCommand = true;
-      delay(movementDelay);
-    }
-  }
-  break;
 */
