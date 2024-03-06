@@ -16,22 +16,33 @@
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 #include <Arduino.h>
-#include <ArduinoQueue.h>
+#include <Queue.h>
 #include "ICM_20948.h"
 #include <Wire.h>
 
-int targetTime = 50; // in seconds
+int targetTime = 75; // in seconds
 int DIS1 = 22000;     // 22000
 int DIS2 = DIS1*2;
 int TIL1 = 195;       //
 int TIL2 = 695;
 int TILF = 260;
 int TURN90 = 4650;
-int turnTime = 4800; // do not change unless u need to ig
+
+int time240 = 2900;
+int time220 = 3000;
+int time200 = 3200;
+int time180 = 3600;
+int time160 = 4000;
+int time140 = 4400;
+int time120 = 5100;
+int time100 = 6000;
+int timeA;
+int timeB;
+int turnTime = 1780; // do not change unless u need to ig
 int startDelay = 2000;
 int movementDelay = 100;
 
-int speedControl = 200;
+int speedControl = 240;
 int linearSpeedLimit = 200;
 
 // temporary fix
@@ -79,9 +90,8 @@ int targetAngle = 0;
 float orientation = 0.0;
 float orientCalibrate = 0.0;
 // int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
-int turnSpeedLimit = 100;
+int turnSpeedLimit = 80;
 int linearSlowLimit = 80;
-bool slowed = false;
 
 int distanceTolerance = 1;
 int encoderTolerance = 1;
@@ -157,13 +167,14 @@ float kiR2 = 0.0;
 
 float calibrateTesting = 0.0;
 
-// timing test
+// timing stuff
 int startTime;
-int endTime;
+int currentTime; //millis - startTime
+int timeLeft; //targetTime - currentTime
 
 // command queues
-ArduinoQueue<int> commandQueue(50);
-ArduinoQueue<int> paramQueue(50);
+Queue<int, 50> commandQueue;
+Queue<int, 50> paramQueue;
 
 void setup() {
   motorShield.begin();
@@ -252,56 +263,105 @@ void setup() {
   // must be first!
   add(START);
 
-
-  /*
-  add(FD, DIS1);
-  add(RT);
-  add(FD, DIS1);
-  add(RT);
-  add(FD, DIS1);
-  add(RT);
-  add(FD, DIS1);
-  add(RT);
-  /**/
-  /*
-  add(LT);
-  add(LT);
-  add(LT);
-  add(LT);
-  add(LT);
-  add(LT);
-  add(LT);
-  add(LT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(LT);
-  add(LT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(LT);
-  add(LT);
-  /**/
-
-  // add(FD,DIS1);
   add(FDT,TIL1);
+  add(RT);
+  add(FD,DIS1);
+  add(LT);
+  add(FDT,TIL1);
+  add(RT);
+  add(FD,DIS1);
+  add(RT);
+  add(BDT,TIL2);
+  add(RT);
+  add(FD,DIS1);
+  add(RT);
+  add(FD,DIS1);
+  add(RT);
+  add(RT);
+  add(FDT,TIL1);
+  add(RT);
+  add(FD,DIS1);
+  add(LT);
+  add(FDT,TIL1);
+  add(RT);
+  add(FD,DIS1);
+  add(RT);
+  add(RT);
+  add(FDT,TIL1);
+  add(RT);
+  add(BDT,TIL2);
+  add(RT);
+  add(FD,DIS1);
+  add(LT);
+  add(BDT,TIL2);
+  add(LT);
+  add(FDT,TILF);
+
+  /*
+  add(FD, DIS1);
+  add(RT);
+  add(FD, DIS1);
+  add(RT);
+  add(FD, DIS1);
+  add(RT);
+  add(FD, DIS1);
+  add(RT);
+  /**/
+  /*
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(LT);
+  add(LT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(LT);
+  add(LT);
+  /*
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  */
+
+  /*
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(RT);
+  add(RT);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  /**/
+  /*
+  add(FDT,TIL1);
+  add(RT);
+  add(FDT,TIL1);
+  */
   // add(BDT,TIL2);
-  add(DM,TIL1);
-  add(LT);
-  add(LT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(RT);
-  add(LT);
-  add(LT);
+  //add(DM,TIL1);
 
   // must be last!
   add(STOP);
@@ -326,13 +386,14 @@ void loop() {
   Serial.print(", ");
   Serial.println(calibrateTesting);
   /**/
+  Serial.println(timeB/8);
 
   /**/
   if (status) {
     digitalWrite(LED_BUILTIN, LOW);
 
-    int currentCmd = commandQueue.getHead();
-    float currentParam = paramQueue.getHead();
+    int currentCmd = commandQueue.front();
+    float currentParam = paramQueue.front();
 
     switch (currentCmd) {
     case WAIT:
@@ -350,6 +411,7 @@ void loop() {
       digitalWrite(LED_BUILTIN, LOW);
       /**/
       delay(startDelay);
+      startTime = millis();
       /**/
       break;
     case FD:
@@ -960,7 +1022,12 @@ void pidCourseCorrect() {
   float deltaT = ((float)(currentTime - previousTimeC)) / 1.0e6;
 
   // compute error, derivative, integral
-  float e = targetAngle - orientation;
+  float e;
+  if (targetAngle == 180 && orientation < 0) {
+    e = orientation - targetAngle;
+  } else {
+    e = targetAngle - orientation;
+  }
   float eDerivative = (e - ePreviousC) / deltaT;
   // Serial.println(e);
   eIntegralC = eIntegralC + e * deltaT;
@@ -995,7 +1062,12 @@ void pidCourseCorrectBackward() {
   float deltaT = ((float)(currentTime - previousTimeC)) / 1.0e6;
 
   // compute error, derivative, integral
-  float e = orientation - targetAngle;
+  float e;
+    if (targetAngle == 180 && orientation < 0) {
+    e = targetAngle - orientation;
+  } else {
+    e = orientation - targetAngle;
+  }
   float eDerivative = (e - ePreviousC) / deltaT;
   // Serial.println(e);
   eIntegralC = eIntegralC + e * deltaT;
@@ -1144,28 +1216,69 @@ void resetIMU() {
   }
 }
 
-/*
 void calculateSpeed() {
-  // hmmm how do?
-  // take into account:
-  /*
-  time of turning
-  how much pausing lol
-  acceleration/decceleration
-  general movement forward backward speed
-  */
-// turnsNum = the number of times robot turns either right or left
-/*
-  turnsNum = 0;
-  for (int i = 0; i < commandQueue.size(); i++) {
-    if (commandQueue.get(i) == RIGHT || commandQueue.get(i) == LEFT) {
-      turnsNum++;
-    }
-  }
+    //turning is fixed speed
+    //need variable turnTime
+    //delay between actions = movementDelay = .1 seconds rn
+    //linearSpeedLimit = linear speed what we are changing
+    //make sure speed cant go negative if impossible to reach within time limit
 
-  // targetTime - turnTime * turnsNum - ...
+    currentTime = millis() - startTime;
+    timeLeft = targetTime - currentTime;
+
+    //iterate through queue and count num of movements, turns, linear
+    int totalMovements = commandQueue.size();
+    int totalTurns = 0;
+    int totalLinearMovements = 0;
+    //now do stuff
+    for (int i = 0; i < commandQueue.size();i++){
+        if(commandQueue.at(i) == RT || commandQueue.at(i) == LT)
+            totalTurns += 1;
+        //Since till is grouped with normal movement, only use till for one spaces and use normal movement before
+        else if (commandQueue.at(i) == FD || commandQueue.at(i) == BD
+                 || commandQueue.at(i) == FDT || commandQueue.at(i) == BDT)
+            totalLinearMovements += 1;
+    }
+    
+
+    int timeForOneLinear = (timeLeft - totalTurns * turnTime - (totalMovements - 1) * movementDelay) / totalLinearMovements;
+    //compare to times to determine which one is closest for the time per movement
+    int timeForOneLinearDifference = 1000000000;
+    //repeat for each of the times
+    if (abs(time100 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time100 - timeForOneLinear);
+        speedControl = 100;
+    }
+    if (abs(time120 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time120 - timeForOneLinear);
+        speedControl = 120;
+    }
+    if (abs(time140 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time140 - timeForOneLinear);
+        speedControl = 140;
+    }
+    if (abs(time160 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time160 - timeForOneLinear);
+        speedControl = 160;
+    }
+    if (abs(time180 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time180 - timeForOneLinear);
+        speedControl = 180;
+    }
+    if (abs(time200 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time200 - timeForOneLinear);
+        speedControl = 200;
+    }
+    if (abs(time220 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time220 - timeForOneLinear);
+        speedControl = 220;
+    }
+    if (abs(time240 - timeForOneLinear) < timeForOneLinearDifference){
+        timeForOneLinearDifference = abs(time240 - timeForOneLinear);
+        speedControl = 240;
+    }
+    //repeat for the times
 }
-*/
 
 // backup in case pidTurn is unreliable
 /*
