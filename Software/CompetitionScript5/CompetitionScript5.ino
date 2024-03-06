@@ -2,7 +2,8 @@
   Pre-Run Checklist
   1. New batteries
   2. Cables
-  3. Hard reset
+  3. Status lights
+  4. Power cycle
   
   Timing Reference Sheet
   Straight:
@@ -20,15 +21,15 @@
 #include <Wire.h>
 
 int targetTime = 50; // in seconds
-int DIS1 = 22000;     // 3700
+int DIS1 = 22000;     // 22000
 int DIS2 = DIS1*2;
-int TIL1 = 195;
+int TIL1 = 195;       //
 int TIL2 = 695;
 int TILF = 260;
 int TURN90 = 4650;
 int turnTime = 4800; // do not change unless u need to ig
 int startDelay = 2000;
-int movementDelay = 250;
+int movementDelay = 100;
 
 int speedControl = 200;
 int linearSpeedLimit = 200;
@@ -85,7 +86,7 @@ bool slowed = false;
 int distanceTolerance = 1;
 int encoderTolerance = 1;
 int directionTolerance = 1;
-float matchTolerance = 1.5;
+float matchTolerance = 1.2;
 
 int slowEnc = 3000;
 int slowDis = 50;
@@ -132,7 +133,7 @@ float kpL = 2.0;
 float kdL = 0.05;
 float kiL = 0.0;
 
-float kpO = 1.0;
+float kpO = 10.0;
 float kdO = 0.0;
 float kiO = 0.0;
 
@@ -142,7 +143,7 @@ float kiR = 0.01;
 
 float kpLinear = 4.0;
 
-float kpC = 8.0;
+float kpC = 6.0;
 float kdC = 0.1;
 float kiC = 0.0;
 
@@ -189,6 +190,7 @@ void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
 
+  /**/
   // initialize IMU communication
   WIRE_PORT.begin();
   WIRE_PORT.setClock(400000);
@@ -224,6 +226,7 @@ void setup() {
       delay(200);
     }
   }
+  /**/
 
   // initialize distance sensors
   pinMode(sensorLTrigPin, OUTPUT);
@@ -265,8 +268,20 @@ void setup() {
   add(LT);
   add(LT);
   add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
+  add(LT);
   add(RT);
   add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(LT);
+  add(LT);
   add(RT);
   add(RT);
   add(RT);
@@ -277,8 +292,16 @@ void setup() {
 
   // add(FD,DIS1);
   add(FDT,TIL1);
-  add(BDT,TIL2);
-  // add(DM,TIL1);
+  // add(BDT,TIL2);
+  add(DM,TIL1);
+  add(LT);
+  add(LT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(RT);
+  add(LT);
+  add(LT);
 
   // must be last!
   add(STOP);
@@ -415,9 +438,13 @@ void loop() {
           motorStop();
           commandQueue.dequeue();
           paramQueue.dequeue();
+          resetIMU();
+          orientation = 0;
+          /*
           updateIMU();
           orientCalibrate += targetAngle - orientation;
           calibrateTesting = orientation;
+          */
           encoderValueLAbs = encoderValueL;
           encoderValueRAbs = encoderValueR;
           newCommand = true;
@@ -471,12 +498,14 @@ void loop() {
         newCommand = false;
         // Serial.println(targetAngle);
       } else {
-        if ((targetAngle == 90 && orientation < 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation < 0)) {
+        if ((targetAngle == 180 && orientation < 0 && fabs(-targetAngle - orientation) > directionTolerance) || fabs(targetAngle - orientation) > directionTolerance) {
+        // if ((targetAngle == 90 && orientation < 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation < 0)) {
+          pidTurn();
           pidPositionMatchRight(encoderValueRAbs - fabs(encoderValueL - encoderValueLAbs));
           /*
           Serial.print(targetAngle);
           Serial.print(", ");
-          Serial.print(orientation - targetAngle);
+          Serial.print(targetAngle - orientation);
           Serial.print(", ");
           Serial.println(orientation);
           /**/
@@ -494,9 +523,9 @@ void loop() {
     case LT:
       // turn left
       if (newCommand) {
-        // Serial.println(targetAngle);
+        Serial.println(targetAngle);
         targetAngle += 90;
-        // Serial.println(targetAngle);
+        Serial.println(targetAngle);
         /**/
         if (targetAngle == 270) {
           targetAngle = -90;
@@ -507,7 +536,8 @@ void loop() {
         newCommand = false;
         // Serial.println(targetAngle);
       } else {
-        if ((targetAngle == -90 && orientation > 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation > 0)) {
+        if ((targetAngle == 180 && orientation < 0 && fabs(- targetAngle - orientation) > directionTolerance) || fabs(targetAngle - orientation) > directionTolerance) {
+          pidTurn();
           pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
           /*
           Serial.print(targetAngle);
@@ -650,6 +680,7 @@ void updateIMU() {
   }
 }
 
+/*
 float pidPositionMatchCalculateLeft(int target, float kp, float kd, float ki) {
   // measure time since last adjustment
   long currentTime = micros();
@@ -668,9 +699,24 @@ float pidPositionMatchCalculateLeft(int target, float kp, float kd, float ki) {
 
   return u;
 }
+*/
 
 void pidPositionMatchLeft(int target, int targetSpeed) {
-  float u = pidPositionMatchCalculateLeft(target, kpL, kdL, kiL);
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeL)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = encoderValueL - target;
+  float eDerivative = (e - ePreviousL) / deltaT;
+  eIntegralL = eIntegralL + e * deltaT;
+
+  // compute PID control signal
+  float u = (kpL * e) + (kdL * eDerivative) + (kiL * eIntegralL);
+
+  previousTimeL = currentTime;
+  ePreviousL = e;
+
   float speed = fabs(u);
 
   if (speed > targetSpeed) {
@@ -690,6 +736,7 @@ void pidPositionMatchLeft(int target, int targetSpeed) {
   }
 }
 
+/*
 float pidPositionMatchCalculateRight(int target, float kp, float kd, float ki) {
   // measure time since last adjustment
   long currentTime = micros();
@@ -708,9 +755,24 @@ float pidPositionMatchCalculateRight(int target, float kp, float kd, float ki) {
 
   return u;
 }
+*/
 
 void pidPositionMatchRight(int target) {
-  float u = pidPositionMatchCalculateRight(target, kpR, kdR, kiR);
+    // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeR)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = encoderValueR - target;
+  float eDerivative = (e - ePreviousR) / deltaT;
+  eIntegralR = eIntegralR + e * deltaT;
+
+  // compute PID control signal
+  float u = (kpR * e) + (kdR * eDerivative) + (kiR * eIntegralR);
+
+  previousTimeR = currentTime;
+  ePreviousR = e;
+
   float speed = fabs(u);
 
   if (speed > 255) {
@@ -730,6 +792,55 @@ void pidPositionMatchRight(int target) {
   }
 }
 
+void pidTurn() {
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeO)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e;
+  if (targetAngle == 180 && orientation < 0) {
+    e = - targetAngle - orientation;
+  } else if (targetAngle == -90 && orientation > 0) {
+    e = orientation + targetAngle;
+  } else {
+    e = targetAngle - orientation;
+  }
+  /*
+  Serial.print(orientation);
+  Serial.print(", ");
+  Serial.print(targetAngle);
+  Serial.print(", ");
+  Serial.println(e);
+  /**/
+  float eDerivative = (e - ePreviousO) / deltaT;
+  eIntegralO = eIntegralO + e * deltaT;
+
+  // compute PID control signal
+  float u = (kpO * e) + (kdO * eDerivative) + (kiO * eIntegralO);
+
+  previousTimeO = currentTime;
+  ePreviousO = e;
+
+  float speed = fabs(u);
+
+  if (speed > turnSpeedLimit) {
+    speed = turnSpeedLimit;
+  }
+  else if (speed < 15) {
+    speed = 15;
+  }
+
+  motorL->setSpeed(speed);
+
+  if (u > 0) {
+    motorL->run(BACKWARD);
+  }
+  else {
+    motorL->run(FORWARD);
+  }
+}
+
+/*
 float pidDistanceMatchCalculateLeft(int target, float kp, float kd, float ki) {
   // measure time since last adjustment
   long currentTime = micros();
@@ -748,16 +859,30 @@ float pidDistanceMatchCalculateLeft(int target, float kp, float kd, float ki) {
 
   return u;
 }
+*/
 
 void pidDistanceMatchLeft(int target, int targetSpeed) {
-  float u = pidDistanceMatchCalculateLeft(target, kpL2, kdL2, kiL2);
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeL2)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = disL - target;
+  float eDerivative = (e - ePreviousL2) / deltaT;
+  eIntegralL2 = eIntegralL2 + e * deltaT;
+
+  // compute PID control signal
+  float u = (kpL2 * e) + (kdL2 * eDerivative) + (kiL2 * eIntegralL2);
+
+  previousTimeL2 = currentTime;
+  ePreviousL2 = e;
+
   float speed = fabs(u);
 
   if (speed > targetSpeed) {
     speed = targetSpeed;
   }
-  else if (speed < 15) {
-    speed = 15;
+  else if (speed < 17) {
+    speed = 17;
   }
 
   motorL->setSpeed(speed);
@@ -770,6 +895,7 @@ void pidDistanceMatchLeft(int target, int targetSpeed) {
   }
 }
 
+/*
 float pidDistanceMatchCalculateRight(int target, float kp, float kd, float ki) {
   // measure time since last adjustment
   long currentTime = micros();
@@ -790,16 +916,31 @@ float pidDistanceMatchCalculateRight(int target, float kp, float kd, float ki) {
   // Serial.println(ePreviousR2);
   return u;
 }
+*/
 
 void pidDistanceMatchRight(int target) {
-  float u = pidDistanceMatchCalculateRight(target, kpR2, kdR2, kiR2);
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeR2)) / 1.0e6;
+
+  // compute error, derivative, integral
+  int e = disR - target;
+  float eDerivative = (e - ePreviousR2) / deltaT;
+  // Serial.println(e);
+  eIntegralR2 = eIntegralR2 + e * deltaT;
+
+  // compute PID control signal
+  float u = (kpR2 * e) + (kdR2 * eDerivative) + (kiR2 * eIntegralR2);
+
+  previousTimeR2 = currentTime;
+  ePreviousR2 = e;
+
   float speed = fabs(u);
 
   if (speed > 255) {
     speed = 255;
   }
-  else if (speed < 15) {
-    speed = 15;
+  else if (speed < 17) {
+    speed = 17;
   }
 
   motorR->setSpeed(speed);
@@ -969,6 +1110,40 @@ void getDistance() {
   disL = distance;
 }
 
+void resetIMU() {
+  bool initialized = false;
+  while (!initialized) {
+    myICM.begin(WIRE_PORT, AD0_VAL);
+
+    if (myICM.status != ICM_20948_Stat_Ok) {
+      delay(500);
+    }
+    else {
+      initialized = true;
+    }
+  }
+
+  bool success = true;
+  success &= (myICM.initializeDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMPSensor(INV_ICM20948_SENSOR_GAME_ROTATION_VECTOR) == ICM_20948_Stat_Ok);
+  success &= (myICM.setDMPODRrate(DMP_ODR_Reg_Quat6, 0) == ICM_20948_Stat_Ok);
+  success &= (myICM.enableFIFO() == ICM_20948_Stat_Ok);
+  success &= (myICM.enableDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.resetDMP() == ICM_20948_Stat_Ok);
+  success &= (myICM.resetFIFO() == ICM_20948_Stat_Ok);
+
+  if (!success) {
+    SERIAL_PORT.println(F("Enable DMP failed!"));
+    SERIAL_PORT.println(F("Please check that you have uncommented line 29 (#define ICM_20948_USE_DMP) in ICM_20948_C.h..."));
+    while (1) {
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(200);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(200);
+    }
+  }
+}
+
 /*
 void calculateSpeed() {
   // hmmm how do?
@@ -991,3 +1166,61 @@ void calculateSpeed() {
   // targetTime - turnTime * turnsNum - ...
 }
 */
+
+// backup in case pidTurn is unreliable
+/*
+    case RT:
+      // turn right
+      if (newCommand) {
+        // Serial.println(targetAngle);
+        targetAngle -= 90;
+        // Serial.println(targetAngle);
+        if (targetAngle == -180) {
+          targetAngle = 180;
+        }
+        motorL->setSpeed(turnSpeedLimit);
+        motorL->run(FORWARD);
+        newCommand = false;
+        // Serial.println(targetAngle);
+      } else {
+        if ((targetAngle == 90 && orientation < 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation < 0)) {
+          pidPositionMatchRight(encoderValueRAbs - fabs(encoderValueL - encoderValueLAbs));
+        } else {
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
+        }
+      }
+      break;
+    case LT:
+      // turn left
+      if (newCommand) {
+        // Serial.println(targetAngle);
+        targetAngle += 90;
+        // Serial.println(targetAngle);
+        if (targetAngle == 270) {
+          targetAngle = -90;
+        }
+        motorL->setSpeed(turnSpeedLimit);
+        motorL->run(BACKWARD);
+        newCommand = false;
+        // Serial.println(targetAngle);
+      } else {
+        if ((targetAngle == -90 && orientation > 0) || (targetAngle != 180 && fabs(orientation - targetAngle) > directionTolerance) || (targetAngle == 180 && orientation > 0)) {
+          pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
+        } else {
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
+        }
+      }
+      break;
+/**/
