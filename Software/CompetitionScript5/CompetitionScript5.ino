@@ -90,12 +90,12 @@ int targetAngle = 0;
 float orientation = 0.0;
 float orientCalibrate = 0.0;
 // int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
-int turnSpeedLimit = 80;
+int turnSpeedLimit = 200;
 int linearSlowLimit = 80;
 
 int distanceTolerance = 1;
 int encoderTolerance = 1;
-int directionTolerance = 1;
+float directionTolerance = 0.5;
 float matchTolerance = 1.2;
 
 int slowEnc = 3000;
@@ -143,7 +143,7 @@ float kpL = 2.0;
 float kdL = 0.05;
 float kiL = 0.0;
 
-float kpO = 10.0;
+float kpO = 15.0;
 float kdO = 0.0;
 float kiO = 0.0;
 
@@ -153,8 +153,8 @@ float kiR = 0.01;
 
 float kpLinear = 4.0;
 
-float kpC = 6.0;
-float kdC = 0.1;
+float kpC = 4.0;
+float kdC = 1.0;
 float kiC = 0.0;
 
 float kpL2 = 3.0;
@@ -263,6 +263,7 @@ void setup() {
   // must be first!
   add(START);
 
+  /*
   add(FDT,TIL1);
   add(RT);
   add(FD,DIS1);
@@ -296,6 +297,7 @@ void setup() {
   add(BDT,TIL2);
   add(LT);
   add(FDT,TILF);
+  */
 
   /*
   add(FD, DIS1);
@@ -307,7 +309,7 @@ void setup() {
   add(FD, DIS1);
   add(RT);
   /**/
-  /*
+  /**/
   add(LT);
   add(LT);
   add(LT);
@@ -354,7 +356,19 @@ void setup() {
   add(FD,DIS1);
   add(FD,DIS1);
   add(FD,DIS1);
+  /*
+  add(RT);
+  add(RT);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(FD,DIS1);
+  add(BD,DIS1);
+  add(BD,DIS1);
+  add(BD,DIS1);
+  add(BD,DIS1);
   /**/
+
   /*
   add(FDT,TIL1);
   add(RT);
@@ -382,11 +396,11 @@ void loop() {
   checkButton();
   updateIMU();
   /*
-  Serial.print(orientation);
-  Serial.print(", ");
-  Serial.println(calibrateTesting);
+  Serial.println(orientation);
+  // Serial.print(", ");
+  // Serial.println(calibrateTesting);
   /**/
-  Serial.println(timeB/8);
+  // Serial.println(timeB/8);
 
   /**/
   if (status) {
@@ -446,7 +460,33 @@ void loop() {
       break;
     case BD:
       // move backward
-      
+      if (newCommand) {
+        newCommand = false;
+        linearSpeedLimit = speedControl;
+        motorL->setSpeed(linearSpeedLimit);
+        motorR->setSpeed(linearSpeedLimit + rightTrim);
+        motorL->run(BACKWARD);
+        motorR->run(BACKWARD);
+      } else {
+        if ((encoderValueLAbs + currentParam) - encoderValueL > encoderTolerance) {
+          // pidPositionMatchLeft(encoderValueLAbs - currentParam, linearSpeedLimit);
+          // pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
+          pidCourseCorrectBackward();
+          // Serial.println(encoderValueL);
+          if ((encoderValueLAbs + currentParam) - encoderValueL < slowEnc) {
+            linearSpeedLimit = linearSlowLimit;
+            motorL->setSpeed(linearSpeedLimit);
+          }
+        } else {
+          motorStop();
+          commandQueue.dequeue();
+          paramQueue.dequeue();
+          encoderValueLAbs = encoderValueL;
+          encoderValueRAbs = encoderValueR;
+          newCommand = true;
+          delay(movementDelay);
+        }
+      }
       break;
     case FDT:
       if (newCommand) {
@@ -598,7 +638,7 @@ void loop() {
         newCommand = false;
         // Serial.println(targetAngle);
       } else {
-        if ((targetAngle == 180 && orientation < 0 && fabs(- targetAngle - orientation) > directionTolerance) || fabs(targetAngle - orientation) > directionTolerance) {
+        if ((targetAngle == 180 && orientation < 0 && fabs(-targetAngle - orientation) > directionTolerance) || fabs(targetAngle - orientation) > directionTolerance) {
           pidTurn();
           pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
           /*
@@ -727,9 +767,11 @@ void updateIMU() {
       double t4 = +1.0 - 2.0 * (q2sqr + q3 * q3);
       double yaw = atan2(t3, t4) * 180.0 / PI;
 
-      float temp = (int) (yaw * 100 + .5);
+      //float temp = (int) (yaw * 100 + .5);
 
-      orientation = (float) temp / 100;
+      // orientation = (float) temp / 100;
+      orientation = yaw;
+      // Serial.println(orientation);
       /*
       orientation += orientCalibrate;
       if (orientation > 180) {
@@ -784,8 +826,8 @@ void pidPositionMatchLeft(int target, int targetSpeed) {
   if (speed > targetSpeed) {
     speed = targetSpeed;
   }
-  else if (speed < 20) {
-    speed = 20;
+  else if (speed < 17) {
+    speed = 17;
   }
 
   motorL->setSpeed(speed);
@@ -840,8 +882,8 @@ void pidPositionMatchRight(int target) {
   if (speed > 255) {
     speed = 255;
   }
-  else if (speed < 20) {
-    speed = 20;
+  else if (speed < 17) {
+    speed = 17;
   }
 
   motorR->setSpeed(speed);
@@ -888,8 +930,8 @@ void pidTurn() {
   if (speed > turnSpeedLimit) {
     speed = turnSpeedLimit;
   }
-  else if (speed < 15) {
-    speed = 15;
+  else if (speed < 17) {
+    speed = 17;
   }
 
   motorL->setSpeed(speed);
@@ -1024,10 +1066,11 @@ void pidCourseCorrect() {
   // compute error, derivative, integral
   float e;
   if (targetAngle == 180 && orientation < 0) {
-    e = orientation - targetAngle;
+    e = - targetAngle - orientation;
   } else {
     e = targetAngle - orientation;
   }
+  Serial.println(e);
   float eDerivative = (e - ePreviousC) / deltaT;
   // Serial.println(e);
   eIntegralC = eIntegralC + e * deltaT;
@@ -1064,7 +1107,7 @@ void pidCourseCorrectBackward() {
   // compute error, derivative, integral
   float e;
     if (targetAngle == 180 && orientation < 0) {
-    e = targetAngle - orientation;
+    e = targetAngle + orientation;
   } else {
     e = orientation - targetAngle;
   }
