@@ -40,9 +40,9 @@ int timeA;
 int timeB;
 int turnTime = 1780; // do not change unless u need to ig
 int startDelay = 2000;
-int movementDelay = 100;
+int movementDelay = 10;
 
-int speedControl = 240;
+int speedControl = 20;
 int linearSpeedLimit = 200;
 
 // temporary fix
@@ -91,11 +91,12 @@ float orientation = 0.0;
 float orientCalibrate = 0.0;
 // int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
 int turnSpeedLimit = 200;
+int turnSpeedMinimum = 20;
 int linearSlowLimit = 80;
 
 int distanceTolerance = 1;
 int encoderTolerance = 1;
-float directionTolerance = 0.5;
+float directionTolerance = 0.8;
 float matchTolerance = 1.2;
 
 int slowEnc = 3000;
@@ -263,7 +264,7 @@ void setup() {
   // must be first!
   add(START);
 
-  /*
+  
   add(FDT,TIL1);
   add(RT);
   add(FD,DIS1);
@@ -277,18 +278,14 @@ void setup() {
   add(FD,DIS1);
   add(RT);
   add(FD,DIS1);
-  add(RT);
-  add(RT);
-  add(FDT,TIL1);
+  add(BD,DIS1);
   add(RT);
   add(FD,DIS1);
   add(LT);
   add(FDT,TIL1);
   add(RT);
   add(FD,DIS1);
-  add(RT);
-  add(RT);
-  add(FDT,TIL1);
+  add(BD,TIL1)
   add(RT);
   add(BDT,TIL2);
   add(RT);
@@ -297,7 +294,7 @@ void setup() {
   add(BDT,TIL2);
   add(LT);
   add(FDT,TILF);
-  */
+  /**/
 
   /*
   add(FD, DIS1);
@@ -309,7 +306,7 @@ void setup() {
   add(FD, DIS1);
   add(RT);
   /**/
-  /**/
+  /*
   add(LT);
   add(LT);
   add(LT);
@@ -826,8 +823,8 @@ void pidPositionMatchLeft(int target, int targetSpeed) {
   if (speed > targetSpeed) {
     speed = targetSpeed;
   }
-  else if (speed < 17) {
-    speed = 17;
+  else if (speed < turnSpeedMinimum) {
+    speed = turnSpeedMinimum;
   }
 
   motorL->setSpeed(speed);
@@ -882,8 +879,8 @@ void pidPositionMatchRight(int target) {
   if (speed > 255) {
     speed = 255;
   }
-  else if (speed < 17) {
-    speed = 17;
+  else if (speed < turnSpeedMinimum) {
+    speed = turnSpeedMinimum;
   }
 
   motorR->setSpeed(speed);
@@ -930,8 +927,8 @@ void pidTurn() {
   if (speed > turnSpeedLimit) {
     speed = turnSpeedLimit;
   }
-  else if (speed < 17) {
-    speed = 17;
+  else if (speed < turnSpeedMinimum) {
+    speed = turnSpeedMinimum;
   }
 
   motorL->setSpeed(speed);
@@ -985,8 +982,8 @@ void pidDistanceMatchLeft(int target, int targetSpeed) {
   if (speed > targetSpeed) {
     speed = targetSpeed;
   }
-  else if (speed < 17) {
-    speed = 17;
+  else if (speed < turnSpeedMinimum) {
+    speed = turnSpeedMinimum;
   }
 
   motorL->setSpeed(speed);
@@ -1043,8 +1040,8 @@ void pidDistanceMatchRight(int target) {
   if (speed > 255) {
     speed = 255;
   }
-  else if (speed < 17) {
-    speed = 17;
+  else if (speed < turnSpeedMinimum) {
+    speed = turnSpeedMinimum;
   }
 
   motorR->setSpeed(speed);
