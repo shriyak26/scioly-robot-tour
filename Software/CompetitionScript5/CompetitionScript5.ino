@@ -21,7 +21,7 @@
 #include <Wire.h>
 
 int targetTime = 75; // in seconds
-int DIS1 = 22000;     // 22000
+int DIS1 = 23000;     // 22000
 int DIS2 = DIS1*2;
 int TIL1 = 195;       //
 int TIL2 = 695;
@@ -42,7 +42,7 @@ int turnTime = 1780; // do not change unless u need to ig
 int startDelay = 2000;
 int movementDelay = 10;
 
-int speedControl = 20;
+int speedControl = 240;
 int linearSpeedLimit = 200;
 
 // temporary fix
@@ -264,7 +264,7 @@ void setup() {
   // must be first!
   add(START);
 
-  
+  /**/
   add(FDT,TIL1);
   add(RT);
   add(FD,DIS1);
@@ -279,14 +279,14 @@ void setup() {
   add(RT);
   add(FD,DIS1);
   add(BD,DIS1);
-  add(RT);
+  add(LT);
   add(FD,DIS1);
   add(LT);
   add(FDT,TIL1);
   add(RT);
   add(FD,DIS1);
-  add(BD,TIL1)
-  add(RT);
+  add(BD,DIS1);
+  add(LT);
   add(BDT,TIL2);
   add(RT);
   add(FD,DIS1);
@@ -902,6 +902,8 @@ void pidTurn() {
   if (targetAngle == 180 && orientation < 0) {
     e = - targetAngle - orientation;
   } else if (targetAngle == -90 && orientation > 0) {
+    e = orientation + targetAngle;
+  } else if (targetAngle == 90 && orientation < 0) {
     e = orientation + targetAngle;
   } else {
     e = targetAngle - orientation;
