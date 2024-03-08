@@ -20,8 +20,8 @@
 #include "ICM_20948.h"
 #include <Wire.h>
 
-int targetTime = 75; // in seconds
-int DIS1 = 23000;     // 22000
+int targetTime = 7; // in seconds
+int DIS1 = 22500;     // 22000
 int DIS2 = DIS1*2;
 int TIL1 = 195;       //
 int TIL2 = 695;
@@ -90,20 +90,23 @@ int targetAngle = 0;
 float orientation = 0.0;
 float orientCalibrate = 0.0;
 // int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
+int theTargetSpeed = 0; //used from calculateSpeed
 int turnSpeedLimit = 200;
 int turnSpeedMinimum = 20;
 int linearSlowLimit = 80;
+int currentSpeed = speedControl; //will just assume current speed is at speed control speed at first.
 
 int distanceTolerance = 1;
 int encoderTolerance = 1;
 float directionTolerance = 0.8;
-float matchTolerance = 1.2;
+float matchTolerance = 1.0;
 
 int slowEnc = 3000;
 int slowDis = 50;
 
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
+long previousEncoderValueL = 0;
 long encoderValueLAbs = 0, encoderValueRAbs = 0;
 //bool accelerate;
 //bool deccelerate;
@@ -139,9 +142,13 @@ long previousTimeC = 0;
 float ePreviousC = 0;
 float eIntegralC = 0;
 
+long previousTimeS = 0;
+float ePreviousS = 0;
+float eIntegralS = 0;
+
 // PID gains
-float kpL = 2.0;
-float kdL = 0.05;
+float kpL = 1.0;
+float kdL = 0.0;
 float kiL = 0.0;
 
 float kpO = 15.0;
@@ -166,11 +173,16 @@ float kpR2 = 3.0;
 float kdR2 = 0.0;
 float kiR2 = 0.0;
 
+float kpS = 1.0;
+float kdS = 0.0;
+float kiS = 0.0;
+
 float calibrateTesting = 0.0;
 
 // timing stuff
 int startTime;
 int currentTime; //millis - startTime
+int previousTime; // used for calculating current velocity
 int timeLeft; //targetTime - currentTime
 
 // command queues
@@ -264,7 +276,7 @@ void setup() {
   // must be first!
   add(START);
 
-  /*
+  /**/
   add(FDT,TIL1);
   add(RT);
   add(FD,DIS1);
@@ -273,6 +285,7 @@ void setup() {
   add(RT);
   add(FD,DIS1);
   add(RT);
+  add(DM,TIL1);
   add(BDT,TIL2);
   add(RT);
   add(FD,DIS1);
@@ -283,10 +296,12 @@ void setup() {
   add(FD,DIS1);
   add(LT);
   add(FDT,TIL1);
+  add(DM,TIL1);
   add(RT);
   add(FD,DIS1);
   add(BD,DIS1);
   add(LT);
+  add(DM,TIL1);
   add(BDT,TIL2);
   add(RT);
   add(FD,DIS1);
@@ -373,7 +388,9 @@ void setup() {
   */
   // add(BDT,TIL2);
   //add(DM,TIL1);
-  add(FD,DIS1);
+  //add(RT);
+  // add(FD,DIS1);
+  //add(FD,DIS1);
 
   // must be last!
   add(STOP);
@@ -399,6 +416,7 @@ void loop() {
   // Serial.println(calibrateTesting);
   /**/
   // Serial.println(timeB/8);
+  // calculateCurrentSpeed();
 
   /**/
   if (status) {
@@ -430,7 +448,10 @@ void loop() {
       // move forward
       if (newCommand) {
         newCommand = false;
+        // calculateSpeed();
         linearSpeedLimit = speedControl;
+        // previousTime = millis();
+        // previousEncoderValueL = encoderValueLAbs;
         motorL->setSpeed(linearSpeedLimit);
         motorR->setSpeed(linearSpeedLimit + rightTrim);
         motorL->run(FORWARD);
@@ -441,12 +462,10 @@ void loop() {
           // pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
           pidCourseCorrect();
           // Serial.println(encoderValueL);
-          /*
           if (encoderValueL - (encoderValueLAbs - currentParam) < slowEnc) {
             linearSpeedLimit = linearSlowLimit;
             motorL->setSpeed(linearSpeedLimit);
           }
-          */
         } else {
           motorStop();
           commandQueue.dequeue();
@@ -541,7 +560,6 @@ void loop() {
           commandQueue.dequeue();
           paramQueue.dequeue();
           resetIMU();
-          orientation = 0;
           /*
           updateIMU();
           orientCalibrate += targetAngle - orientation;
@@ -724,8 +742,7 @@ void checkButton() {
   }
 }
 
-void checkDistance()
-{
+void checkDistance() {
   digitalWrite(sensorLTrigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(sensorLTrigPin, HIGH);
@@ -799,8 +816,6 @@ void pidPositionMatchLeft(int target, int targetSpeed) {
 
   previousTimeL = currentTime;
   ePreviousL = e;
-  
-  linearSpeedLimit = u;
 
   float speed = fabs(u);
 
@@ -920,8 +935,6 @@ void pidDistanceMatchLeft(int target, int targetSpeed) {
 
   previousTimeL2 = currentTime;
   ePreviousL2 = e;
-
-  linearSpeedLimit = u;
 
   float speed = fabs(u);
 
@@ -1059,6 +1072,43 @@ void pidCourseCorrectBackward() {
   }
 }
 
+/*
+void pidSpeedControl() {
+  // measure time since last adjustment
+  long currentTime = micros();
+  float deltaT = ((float)(currentTime - previousTimeS)) / 1.0e6;
+
+  // compute error, derivative, integral
+  float e = theTargetSpeed - currentSpeed;
+  float eDerivative = (e - ePreviousS) / deltaT;
+  // Serial.println(e);
+  eIntegralS = eIntegralS + e * deltaT;
+
+  // compute PID control signal
+  float u = (kpS * e) + (kdS * eDerivative) + (kiS * eIntegralS);
+
+  previousTimeS = currentTime;
+  ePreviousS = e;
+
+  linearSpeedLimit += u;
+
+  if (linearSpeedLimit > 245) {
+    linearSpeedLimit = 245;
+    motorL->setSpeed(linearSpeedLimit);
+    motorL->run(FORWARD);
+  } else if (linearSpeedLimit < 0) {
+    if (linearSpeedLimit < -245) {
+      linearSpeedLimit = -245;
+    }
+    motorL->setSpeed(fabs(linearSpeedLimit));
+    motorL->run(BACKWARD);
+  } else {
+    motorL->setSpeed(linearSpeedLimit);
+    motorL->run(FORWARD);
+  }
+}
+*/
+
 void updateEncoderL() {
   int MSB = digitalRead(encoderLPinA); // MSB = most significant bit
   int LSB = digitalRead(encoderLPinB); // LSB = least significant bit
@@ -1145,8 +1195,12 @@ void resetIMU() {
       delay(200);
     }
   }
+
+  orientation = 0;
+  targetAngle = 0;
 }
 
+/*
 void calculateSpeed() {
     //turning is fixed speed
     //need variable turnTime
@@ -1162,7 +1216,7 @@ void calculateSpeed() {
     int totalTurns = 0;
     int totalLinearMovements = 0;
     //now do stuff
-    for (int i = 0; i < commandQueue.size();i++){
+    for (int i = 0; i < commandQueue.size();i++) {
         if(commandQueue.at(i) == RT || commandQueue.at(i) == LT)
             totalTurns += 1;
         //Since till is grouped with normal movement, only use till for one spaces and use normal movement before
@@ -1170,46 +1224,33 @@ void calculateSpeed() {
                  || commandQueue.at(i) == FDT || commandQueue.at(i) == BDT)
             totalLinearMovements += 1;
     }
-    
+
 
     int timeForOneLinear = (timeLeft - totalTurns * turnTime - (totalMovements - 1) * movementDelay) / totalLinearMovements;
-    //compare to times to determine which one is closest for the time per movement
-    int timeForOneLinearDifference = 1000000000;
-    //repeat for each of the times
-    if (abs(time100 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time100 - timeForOneLinear);
-        speedControl = 100;
-    }
-    if (abs(time120 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time120 - timeForOneLinear);
-        speedControl = 120;
-    }
-    if (abs(time140 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time140 - timeForOneLinear);
-        speedControl = 140;
-    }
-    if (abs(time160 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time160 - timeForOneLinear);
-        speedControl = 160;
-    }
-    if (abs(time180 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time180 - timeForOneLinear);
-        speedControl = 180;
-    }
-    if (abs(time200 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time200 - timeForOneLinear);
-        speedControl = 200;
-    }
-    if (abs(time220 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time220 - timeForOneLinear);
-        speedControl = 220;
-    }
-    if (abs(time240 - timeForOneLinear) < timeForOneLinearDifference){
-        timeForOneLinearDifference = abs(time240 - timeForOneLinear);
-        speedControl = 240;
-    }
-    //repeat for the times
+    theTargetSpeed = 500 / timeForOneLinear;
 }
+
+void calculateCurrentSpeed() {
+    //wheel dimensions: 60mm diamter
+    int encoderValueLDiff = 0;
+    int timeDiff = 0;
+    
+    if (encoderValueL != previousEncoderValueL) {
+        encoderValueLDiff = abs(encoderValueL - previousEncoderValueL);
+        timeDiff = millis() - previousTime; //time apparently doesn't reset, so should always be positive or 0
+        previousTime = millis();
+        previousEncoderValueL = encoderValueL;
+        //not assuming time has passed just in case
+        if (timeDiff != 0) {
+            //current speed = 2 wheel radius pi / time per 8250 encoder pulses which is one revolution
+            currentSpeed = 2 * 60 * PI / ((timeDiff / encoderValueLDiff /*time per one encoder*///) * 8250 /*num of encoder pulses*/);
+        //}
+        // mm/second
+    //}
+
+    // Serial.println(currentSpeed);
+//}
+
 
 // backup in case pidTurn is unreliable
 /*

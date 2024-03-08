@@ -20,7 +20,7 @@ volatile long encodeTest = 0;
 void setup()
 {
   motorShield.begin();
-  motorL->setSpeed(20);
+  motorL->setSpeed(100);
   motorR->setSpeed(20);
   Serial.begin(115200);
 
@@ -48,18 +48,20 @@ void loop()
 {
   Serial.println("bye");
   motorL->run(FORWARD);
-  motorR->run(FORWARD);
+  // motorR->run(FORWARD);
 
-  /**/
+  /*
   for(int i = 0; i < 1000; i++)
   {
     Serial.print(encoderValueL);
-    Serial.print(" ");
-    Serial.println(encoderValueR);
+    //Serial.print(", ");
+    //Serial.println(encoderValueR);
     delay(1);
   }
   /**/
-  delay(100);
+  while (encoderValueL > -8250) {
+    Serial.println(encoderValueL);
+  }
 
   motorL->setSpeed(0);
   motorR->setSpeed(0);
