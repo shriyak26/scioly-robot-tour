@@ -21,7 +21,7 @@
 #include <Wire.h>
 
 int targetTime = 7; // in seconds
-int DIS1 = 19000;     // 22000
+int DIS1 = 18500;     // 22000
 int DIS2 = DIS1*2;
 int TIL1 = 195;       //
 int TIL2 = 695;
@@ -91,14 +91,14 @@ float orientCalibrate = 0.0;
 // int defaultSpeedL = 155, defaultSpeedR = 150; //these are literally just assigned to target speed immediately idk if you want
 int theTargetSpeed = 0; //used from calculateSpeed
 int turnSpeedLimit = 200;
-int turnSpeedMinimum = 20;
+int turnSpeedMinimum = 17;
 int linearSlowLimit = 80;
 int currentSpeed = speedControl; //will just assume current speed is at speed control speed at first.
 
 int distanceTolerance = 1;
 int encoderTolerance = 1;
-float directionTolerance = 0.8;
-float matchTolerance = 1.0;
+float directionTolerance = 1.0;
+float matchTolerance = 0.85;
 
 int slowEnc = 2000;
 int slowDis = 40;
@@ -276,6 +276,34 @@ void setup() {
   add(START);
 
   /**/
+  add(FDT,TIL1);
+  add(RT);
+  add(FD,DIS1);
+  add(LT);
+  add(FDT,TIL1);
+  add(BDT,TIL2);
+  add(LT);
+  add(FD,DIS1*3);
+  add(RT);
+  add(FD,DIS1*3);
+  add(RT);
+  add(FD,DIS1*3);
+  add(RT);
+  add(FDT,TIL1);
+  add(BDT,TIL2);
+  add(RT);
+  add(FD,DIS1*3);
+  add(LT);
+  add(FD,DIS2);
+  add(LT);
+  add(FDT,TIL1);
+  add(LT);
+  add(FDT,TIL1);
+  add(BDT,TIL2);
+  add(RT);
+  add(BDT,TIL2);
+  add(LT);
+  add(FDT,TILF);
   /**/
 
   /*
@@ -324,7 +352,7 @@ void setup() {
   add(LT);
   */
 
-  /**/
+  /*
   add(FD,DIS1);
   add(FD,DIS1);
   add(FD,DIS1);
@@ -354,7 +382,7 @@ void setup() {
   add(FDT,TIL1);
   */
   // add(BDT,TIL2);
-  //add(DM,TIL1);
+  // add(DM,TIL1);
   //add(RT);
   // add(FD,DIS1);
   //add(FD,DIS1);
@@ -428,6 +456,7 @@ void loop() {
           // pidPositionMatchLeft(encoderValueLAbs - currentParam, linearSpeedLimit);
           // pidPositionMatchRight(encoderValueRAbs + fabs(encoderValueL - encoderValueLAbs));
           pidCourseCorrect();
+          Serial.println(orientation);
           // Serial.println(encoderValueL);
           if (encoderValueL - (encoderValueLAbs - currentParam) < slowEnc) {
             linearSpeedLimit = linearSlowLimit;
