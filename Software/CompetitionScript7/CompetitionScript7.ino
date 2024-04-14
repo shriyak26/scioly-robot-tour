@@ -21,12 +21,11 @@
 #include <Wire.h>
 
 int targetTime = 7; // in seconds
-int DIS1 = 22500;     // 22000
+int DIS1 = 19000;     // 22000
 int DIS2 = DIS1*2;
 int TIL1 = 195;       //
 int TIL2 = 695;
 int TILF = 260;
-int TURN90 = 4650;
 
 int time240 = 2900;
 int time220 = 3000;
@@ -42,11 +41,11 @@ int turnTime = 1780; // do not change unless u need to ig
 int startDelay = 2000;
 int movementDelay = 10;
 
-int speedControl = 240;
+int speedControl = 230;
 int linearSpeedLimit = 200;
 
 // temporary fix
-int rightTrim = 5;
+int rightTrim = 0;
 
 // Pins
 #define sensorLTrigPin 2
@@ -101,8 +100,8 @@ int encoderTolerance = 1;
 float directionTolerance = 0.8;
 float matchTolerance = 1.0;
 
-int slowEnc = 3000;
-int slowDis = 50;
+int slowEnc = 2000;
+int slowDis = 40;
 
 volatile int lastEncodedL = 0, lastEncodedR = 0;
 volatile long encoderValueL = 0, encoderValueR = 0;
@@ -277,38 +276,6 @@ void setup() {
   add(START);
 
   /**/
-  add(FDT,TIL1);
-  add(RT);
-  add(FD,DIS1);
-  add(LT);
-  add(FDT,TIL1);
-  add(RT);
-  add(FD,DIS1);
-  add(RT);
-  add(DM,TIL1);
-  add(BDT,TIL2);
-  add(RT);
-  add(FD,DIS1);
-  add(RT);
-  add(FD,DIS1);
-  add(BD,DIS1);
-  add(LT);
-  add(FD,DIS1);
-  add(LT);
-  add(FDT,TIL1);
-  add(DM,TIL1);
-  add(RT);
-  add(FD,DIS1);
-  add(BD,DIS1);
-  add(LT);
-  add(DM,TIL1);
-  add(BDT,TIL2);
-  add(RT);
-  add(FD,DIS1);
-  add(LT);
-  add(BDT,TIL2);
-  add(LT);
-  add(FDT,TILF);
   /**/
 
   /*
@@ -357,7 +324,7 @@ void setup() {
   add(LT);
   */
 
-  /*
+  /**/
   add(FD,DIS1);
   add(FD,DIS1);
   add(FD,DIS1);
