@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/davin/Downloads/scioly-robot-tour/Software/CompetitionScript",
-      "program": "c:/Users/davin/Downloads/scioly-robot-tour/Software/CompetitionScript/build/Debug/outDebug",
+      "cwd": "c:/Users/skunnanath1/Downloads/scioly-robot-tour/Software/CompetitionScript",
+      "program": "c:/Users/skunnanath1/Downloads/scioly-robot-tour/Software/CompetitionScript/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
